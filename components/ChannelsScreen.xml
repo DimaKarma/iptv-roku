@@ -35,7 +35,7 @@
                     itemSize="[330, 220]"
                     itemSpacing="[12, 12]"
                     numColumns="4"
-                    numRows="3" />
+                    numRows="4" />
                     
         <!-- Empty / Not Found Label -->
         <Label id="emptyLabel"
@@ -48,7 +48,7 @@
                
         <!-- Toast -->
         <Rectangle id="toastBg"
-                   translation="[460, 950]"
+                   translation="[460, 990]"
                    width="1000"
                    height="60"
                    color="0x18211CFF"
