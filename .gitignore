@@ -1,0 +1,9 @@
+# Secrets: the real config.json contains the playlist URL with a subscription token
+config.json
+
+# Build/deploy artifacts
+build.zip
+*.zip
+install_resp.html
+resp_shot.txt
+*.log

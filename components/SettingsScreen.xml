@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="SettingsScreen" extends="Group">
+    <script type="text/brightscript" uri="pkg:/components/SettingsScreen.brs" />
+    <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
+    <interface>
+        <field id="info" type="assocarray" onChange="onInfoChange" />
+        <field id="action" type="string" />
+        <field id="newUrl" type="string" />
+        <field id="exitRequested" type="boolean" />
+    </interface>
+
+    <children>
+        <Label id="headerLabel"
+               text="SETTINGS"
+               translation="[96, 54]"
+               color="0xECF2EEFF"
+               width="1700"
+               height="40" />
+
+        <LabelList id="settingsList"
+                   translation="[96, 120]"
+                   itemSize="[800, 70]"
+                   itemSpacing="[0, 10]"
+                   color="0x8A968EFF"
+                   focusedColor="0x74D45BFF"
+                   numRows="5" />
+                   
+        <Label id="infoLabel"
+               translation="[960, 120]"
+               color="0x8A968EFF"
+               width="800"
+               height="800"
+               wrap="true" />
+               
+        <!-- Keyboard overlay -->
+        <Rectangle id="keyboardBg"
+                   width="1920" height="1080"
+                   color="0x0E1310E6"
+                   visible="false">
+            <Keyboard id="keyboard" translation="[700, 200]" />
+            <Label id="keyboardHint"
+                   text="Enter a new playlist URL"
+                   translation="[700, 150]"
+                   color="0xECF2EEFF" />
+            <Button id="keyboardOk"
+                    text="Save"
+                    translation="[700, 500]" />
+            <Button id="keyboardCancel"
+                    text="Cancel"
+                    translation="[700, 560]" />
+        </Rectangle>
+
+        <!-- Toast -->
+        <Rectangle id="toastBg"
+                   translation="[460, 950]"
+                   width="1000"
+                   height="60"
+                   color="0x18211CFF"
+                   visible="false">
+            <Label id="toastLabel"
+                   width="1000"
+                   height="60"
+                   horizAlign="center"
+                   vertAlign="center"
+                   color="0xECF2EEFF" />
+        </Rectangle>
+        
+        <Timer id="toastTimer" duration="2.5" repeat="false" />
+    </children>
+</component>

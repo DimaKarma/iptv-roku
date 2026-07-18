@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="ChannelsScreen" extends="Group">
+    <script type="text/brightscript" uri="pkg:/components/ChannelsScreen.brs" />
+    <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
+    <script type="text/brightscript" uri="pkg:/source/ChannelStore.brs" />
+    <interface>
+        <field id="playlistResult" type="assocarray" onChange="onPlaylistChange" />
+        <field id="playRequest" type="assocarray" />
+        <field id="restoreFocus" type="boolean" />
+        <field id="openSearch" type="boolean" />
+        <field id="openSettings" type="boolean" />
+    </interface>
+    
+    <children>
+        <!-- Rail on the left -->
+        <LabelList id="categoryList"
+                   translation="[96, 54]"
+                   itemSize="[380, 50]"
+                   itemSpacing="[0, 10]"
+                   color="0x8A968EFF"
+                   focusedColor="0x74D45BFF"
+                   numRows="15" />
+                   
+        <!-- Header -->
+        <Label id="headerLabel"
+               translation="[500, 54]"
+               color="0xECF2EEFF"
+               width="1300"
+               height="40" />
+               
+        <!-- Grid on the right -->
+        <MarkupGrid id="channelGrid"
+                    translation="[500, 114]"
+                    itemComponentName="ChannelCard"
+                    itemSize="[330, 220]"
+                    itemSpacing="[12, 12]"
+                    numColumns="4"
+                    numRows="3" />
+                    
+        <!-- Empty / Not Found Label -->
+        <Label id="emptyLabel"
+               translation="[500, 400]"
+               width="1324"
+               horizAlign="center"
+               color="0x8A968EFF"
+               text="Nothing found"
+               visible="false" />
+               
+        <!-- Toast -->
+        <Rectangle id="toastBg"
+                   translation="[460, 950]"
+                   width="1000"
+                   height="60"
+                   color="0x18211CFF"
+                   visible="false">
+            <Label id="toastLabel"
+                   width="1000"
+                   height="60"
+                   horizAlign="center"
+                   vertAlign="center"
+                   color="0xECF2EEFF" />
+        </Rectangle>
+        
+        <Timer id="toastTimer" duration="2.5" repeat="false" />
+        <Timer id="gridDebounceTimer" duration="0.12" repeat="false" />
+    </children>
+</component>

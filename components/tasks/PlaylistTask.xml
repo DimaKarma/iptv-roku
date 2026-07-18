@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="PlaylistTask" extends="Task">
+    <script type="text/brightscript" uri="pkg:/source/M3uParser.brs" />
+    <script type="text/brightscript" uri="pkg:/components/tasks/PlaylistTask.brs" />
+    <interface>
+        <field id="extraPlaylists" type="array" />
+        <field id="playlistUrl" type="string" />
+        <field id="result" type="assocarray" />
+        <field id="status" type="string" />
+        <field id="error" type="string" />
+    </interface>
+</component>
