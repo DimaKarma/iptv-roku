@@ -1,0 +1,9 @@
+# Секреты: реальный config.json содержит URL плейлиста с токеном подписки
+config.json
+
+# Артефакты сборки/деплоя
+build.zip
+*.zip
+install_resp.html
+resp_shot.txt
+*.log

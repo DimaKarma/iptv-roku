@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="PlayerScreen" extends="Group">
+    <script type="text/brightscript" uri="pkg:/components/PlayerScreen.brs" />
+    <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
+    <script type="text/brightscript" uri="pkg:/source/ChannelStore.brs" />
+    <script type="text/brightscript" uri="pkg:/source/Epg.brs" />
+    <interface>
+        <field id="playlist" type="array" />
+        <field id="playCommand" type="boolean" onChange="onPlayCommand" />
+        <field id="startIndex" type="integer" />
+        <field id="exitRequested" type="boolean" />
+    </interface>
+    
+    <children>
+        <Video id="video"
+               width="1920" height="1080"
+               translation="[0, 0]"
+               visible="true" />
+               
+        <!-- Spinner & Loading text -->
+        <BusySpinner id="spinner" translation="[960, 480]" visible="false" />
+        <Label id="loadingLabel"
+               translation="[0, 560]"
+               width="1920" horizAlign="center"
+               color="0xECF2EEFF" visible="false" />
+               
+        <!-- Overlay (OK button) -->
+        <Rectangle id="overlayGroup"
+                   width="1920" height="180"
+                   translation="[0, 900]"
+                   color="0x000000CC"
+                   visible="false">
+            <Label id="overlayName"
+                   translation="[100, 30]"
+                   width="1400" height="60"
+                   color="0xECF2EEFF" />
+            <Label id="overlayGroupLabel"
+                   translation="[100, 100]"
+                   width="1400" height="40"
+                   color="0x8A968EFF" />
+            <Label id="overlayTime"
+                   translation="[1500, 30]"
+                   width="300" height="60"
+                   horizAlign="right"
+                   color="0xECF2EEFF" />
+            <Label id="overlayEpg"
+                   translation="[100, 140]"
+                   width="1720" height="30"
+                   color="0x8A968EFF" text="" />
+        </Rectangle>
+        
+        <!-- Mini-banner (Zap) -->
+        <Rectangle id="miniBanner"
+                   width="600" height="80"
+                   translation="[660, 950]"
+                   color="0x000000CC"
+                   visible="false">
+            <Label id="miniBannerLabel"
+                   translation="[20, 0]"
+                   width="560" height="80"
+                   horizAlign="center" vertAlign="center"
+                   color="0xECF2EEFF" />
+        </Rectangle>
+        
+        <!-- Error Dialog -->
+        <Rectangle id="errorDialog"
+                   width="800" height="400"
+                   translation="[560, 340]"
+                   color="0x18211CFF"
+                   visible="false">
+            <Label id="errorTitle"
+                   text="Playback error"
+                   translation="[0, 40]"
+                   width="800" horizAlign="center"
+                   color="0xECF2EEFF" />
+            <Label id="errorMsg"
+                   translation="[50, 120]"
+                   width="700" height="80"
+                   horizAlign="center" wrap="true"
+                   color="0x8A968EFF" />
+                   
+            <LabelList id="errorOptions"
+                       translation="[200, 220]"
+                       itemSize="[400, 50]"
+                       color="0x8A968EFF"
+                       focusedColor="0x74D45BFF" />
+        </Rectangle>
+        
+        <!-- Toast for favorites -->
+        <Rectangle id="toastBg"
+                   translation="[460, 800]"
+                   width="1000" height="60"
+                   color="0x18211CCC"
+                   visible="false">
+            <Label id="toastLabel"
+                   width="1000" height="60"
+                   horizAlign="center" vertAlign="center"
+                   color="0xECF2EEFF" />
+        </Rectangle>
+        
+        <Timer id="overlayTimer" duration="5.0" repeat="false" />
+        <Timer id="miniBannerTimer" duration="3.0" repeat="false" />
+        <Timer id="toastTimer" duration="2.5" repeat="false" />
+        <Timer id="clockTimer" duration="30.0" repeat="true" />
+        <Timer id="okTimer" duration="0.8" repeat="false" />
+        
+        <!-- Zapper panel (вертикальный список справа) -->
+        <Rectangle id="zapperPanel"
+                   width="560" height="1080"
+                   translation="[1360, 0]"
+                   color="0x000000E6"
+                   visible="false">
+            <MarkupGrid id="zapperGrid"
+                        translation="[20, 30]"
+                        itemComponentName="ZapperCard"
+                        itemSize="[520, 88]"
+                        itemSpacing="[0, 8]"
+                        numRows="11"
+                        numColumns="1"
+                        vertFocusAnimationStyle="floatingFocus"
+                        drawFocusFeedback="false" />
+        </Rectangle>
+        <Timer id="zapperTimer" duration="5.0" repeat="false" />
+    </children>
+</component>

@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="SearchScreen" extends="Group">
+    <script type="text/brightscript" uri="pkg:/components/SearchScreen.brs" />
+    <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
+    <script type="text/brightscript" uri="pkg:/source/ChannelStore.brs" />
+    <interface>
+        <field id="channels" type="array" onChange="onChannelsChange" />
+        <field id="playRequest" type="assocarray" />
+        <field id="exitRequested" type="boolean" />
+    </interface>
+
+    <children>
+        <Button id="searchButton" 
+                translation="[96, 54]" 
+                minWidth="800" 
+                text="Search: (press OK)" />
+                
+        <Label id="hintLabel"
+               translation="[96, 130]"
+               color="0x8A968EFF"
+               width="800"
+               wrap="true"
+               text="OK opens the keyboard. Back exits. From the keyboard, Back returns to results." />
+               
+        <Label id="headerLabel"
+               translation="[96, 180]"
+               color="0xECF2EEFF"
+               width="800"
+               height="40" />
+               
+        <MarkupGrid id="channelGrid"
+                    translation="[96, 220]"
+                    itemComponentName="ChannelCard"
+                    itemSize="[330, 220]"
+                    itemSpacing="[12, 12]"
+                    numColumns="4"
+                    numRows="3" />
+                    
+        <Label id="statusLabel"
+               translation="[96, 400]"
+               width="1300"
+               horizAlign="center"
+               color="0x8A968EFF"
+               text="Type at least 2 characters" />
+               
+        <Rectangle id="keyboardBg"
+                   width="1920"
+                   height="1080"
+                   color="0x0E1310E6"
+                   visible="false">
+            <Label id="keyboardHint"
+                   translation="[700, 200]"
+                   width="600"
+                   horizAlign="center"
+                   color="0xECF2EEFF"
+                   text="Type to search. Back returns to results." />
+            <Keyboard id="keyboard" translation="[700, 250]" />
+        </Rectangle>
+               
+        <!-- Toast -->
+        <Rectangle id="toastBg"
+                   translation="[460, 950]"
+                   width="1000"
+                   height="60"
+                   color="0x18211CFF"
+                   visible="false">
+            <Label id="toastLabel"
+                   width="1000"
+                   height="60"
+                   horizAlign="center"
+                   vertAlign="center"
+                   color="0xECF2EEFF" />
+        </Rectangle>
+        
+        <Timer id="searchTimer" duration="0.3" repeat="false" />
+        <Timer id="toastTimer" duration="2.5" repeat="false" />
+    </children>
+</component>

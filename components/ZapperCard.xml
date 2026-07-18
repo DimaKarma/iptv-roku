@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="ZapperCard" extends="Group">
+    <script type="text/brightscript" uri="pkg:/components/ZapperCard.brs" />
+    <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
+    <script type="text/brightscript" uri="pkg:/source/Epg.brs" />
+    
+    <interface>
+        <field id="itemContent" type="node" onChange="onContentChange" />
+        <field id="focusPercent" type="float" onChange="onFocusChange" />
+    </interface>
+    
+    <children>
+        <!-- маленькая цветная плашка-инициалы слева -->
+        <Rectangle id="fallbackBg" width="72" height="72" translation="[8, 8]">
+            <Label id="fallbackLabel" width="72" height="72" horizAlign="center" vertAlign="center" />
+        </Rectangle>
+
+        <Label id="nameLabel" translation="[92, 12]" width="384" height="34" wrap="false" />
+        <Label id="epgLabel"  translation="[92, 48]" width="384" height="28" wrap="false" />
+
+        <Label id="favStar" text="★" translation="[490, 10]" color="0x74D45BFF" visible="false" />
+        <Rectangle id="badge" width="20" height="20" translation="[490, 50]" visible="false" />
+
+        <!-- рамка фокуса под строку 520×88 -->
+        <Group id="focusBorder" visible="false">
+            <Rectangle width="528" height="4" translation="[-4, -4]" color="0x4FB03AFF" />
+            <Rectangle width="528" height="4" translation="[-4, 88]" color="0x4FB03AFF" />
+            <Rectangle width="4" height="96" translation="[-4, -4]" color="0x4FB03AFF" />
+            <Rectangle width="4" height="96" translation="[520, -4]" color="0x4FB03AFF" />
+        </Group>
+    </children>
+</component>

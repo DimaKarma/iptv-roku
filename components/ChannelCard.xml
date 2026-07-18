@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="ChannelCard" extends="Group">
+    <script type="text/brightscript" uri="pkg:/components/ChannelCard.brs" />
+    <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
+    <script type="text/brightscript" uri="pkg:/source/Epg.brs" />
+    <interface>
+        <field id="itemContent" type="node" onChange="onContentChange" />
+        <field id="focusPercent" type="float" onChange="onFocusChange" />
+    </interface>
+    
+    <children>
+        <Rectangle id="background" width="330" height="220" color="0x18211CFF" />
+        
+        <!-- Fallback logo -->
+        <Rectangle id="fallbackBg" width="330" height="150" color="0x18211CFF">
+            <Label id="fallbackLabel" width="330" height="150" horizAlign="center" vertAlign="center" text="" color="0xECF2EEFF" />
+        </Rectangle>
+        
+        <!-- Real logo -->
+        <Poster id="logo" width="330" height="150" loadDisplayMode="scaleToFit" visible="false" />
+        
+        <!-- Error icon/dot for incompatible -->
+        <Rectangle id="errorBadge" width="24" height="24" translation="[296, 10]" color="0xD9584FFF" visible="false" />
+        
+        <!-- Dimmer for incompatible -->
+        <Rectangle id="dimmer" width="330" height="220" color="0x00000088" visible="false" />
+        
+        <!-- Favorite star -->
+        <Label id="favStar" text="★" width="30" height="30" translation="[10, 10]" color="0x74D45BFF" visible="false" />
+        
+        <!-- Name -->
+        <Label id="nameLabel" translation="[12, 160]" width="306" height="30" wrap="false" color="0xECF2EEFF" />
+        
+        <!-- EPG placeholder -->
+        <Label id="epgLabel" translation="[12, 190]" width="306" height="20" wrap="false" color="0x8A968EFF" text="" />
+        
+        <!-- Focus border (4px) -->
+        <Group id="focusBorder" visible="false">
+            <Rectangle width="338" height="4" color="0x4FB03AFF" translation="[-4, -4]" />
+            <Rectangle width="338" height="4" color="0x4FB03AFF" translation="[-4, 220]" />
+            <Rectangle width="4" height="228" color="0x4FB03AFF" translation="[-4, -4]" />
+            <Rectangle width="4" height="228" color="0x4FB03AFF" translation="[330, -4]" />
+        </Group>
+    </children>
+</component>

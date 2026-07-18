@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="MainScene" extends="Scene">
+    <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
+    <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
+    <children>
+        <Timer id="epgRefreshTimer" duration="3600" repeat="true" />
+        <Rectangle id="background" width="1920" height="1080" color="0x0E1310FF">
+            <!-- Loading state -->
+            <BusySpinner id="spinner" translation="[960, 480]" visible="true" />
+            <Label id="statusLabel"
+                   text="Loading…"
+                   color="0x8A968EFF"
+                   translation="[0, 560]"
+                   width="1920"
+                   horizAlign="center"
+                   visible="true" />
+            
+            <!-- Error state -->
+            <Label id="errorLabel"
+                   text=""
+                   color="0xECF2EEFF"
+                   translation="[0, 480]"
+                   width="1920"
+                   horizAlign="center"
+                   visible="false" />
+            <Label id="errorHintLabel"
+                   text="Press OK to retry"
+                   color="0x8A968EFF"
+                   translation="[0, 540]"
+                   width="1920"
+                   horizAlign="center"
+                   visible="false" />
+                   
+            <!-- Main Content -->
+            <ChannelsScreen id="channelsScreen" visible="false" />
+            <PlayerScreen id="playerScreen" visible="false" />
+            
+            <!-- Search and Settings -->
+            <SearchScreen id="searchScreen" visible="false" />
+            <SettingsScreen id="settingsScreen" visible="false" />
+            
+            <!-- Onboarding -->
+            <Group id="onboardingGroup" visible="false">
+                <Label text="IPTV Player"
+                       translation="[0, 200]"
+                       color="0xECF2EEFF"
+                       width="1920"
+                       horizAlign="center" />
+                <Keyboard id="onboardingKeyboard" translation="[700, 300]" />
+                <Label text="Or set the URL in config.json and reinstall"
+                       translation="[0, 800]"
+                       color="0x8A968EFF"
+                       width="1920"
+                       horizAlign="center" />
+                <Button id="onboardingOk"
+                        text="Save and continue"
+                        translation="[700, 700]" />
+            </Group>
+        </Rectangle>
+    </children>
+</component>
