@@ -25,13 +25,37 @@ import re
 import sys
 import time
 import urllib.request
-import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+
+from defusedxml.ElementTree import iterparse as safe_iterparse
 
 XMLTV_URL = "http://epg.it999.ru/epg.xml.gz"
 WINDOW_BEHIND = 2 * 3600     # 2 hours back
 WINDOW_AHEAD = 18 * 3600     # 18 hours ahead
 HTTP_TIMEOUT = 180
+# The source is reachable only over plain HTTP (its HTTPS cert is expired and 301s to
+# http://epg.one). EPG is integrity-not-confidentiality data and the XML below is parsed
+# defensively (defusedxml + a decompressed-size cap), so plain HTTP is accepted here.
+MAX_DECOMPRESSED = 2 * 1024 * 1024 * 1024   # 2 GiB cap — guards against a gzip bomb
+
+
+class _LimitedReader:
+    """Wrap a stream and abort if it yields more than `limit` bytes (decompression-bomb guard)."""
+    def __init__(self, fp, limit):
+        self._fp = fp
+        self._limit = limit
+        self._seen = 0
+
+    def read(self, size=-1):
+        chunk = self._fp.read(size)
+        self._seen += len(chunk)
+        if self._seen > self._limit:
+            raise ValueError("XMLTV stream exceeds the %d-byte decompression cap" % self._limit)
+        return chunk
+
+    def close(self):
+        return self._fp.close()
+
 
 _QUALITY_RE = re.compile(r'\b(fhd|uhd|hd|sd|4k)\b')
 _SHIFT_RE = re.compile(r'\+\d+')
@@ -85,14 +109,14 @@ def main():
     print("Downloading %s ..." % XMLTV_URL)
     req = urllib.request.Request(XMLTV_URL, headers={"User-Agent": "epg-gen/1.0"})
     resp = urllib.request.urlopen(req, timeout=HTTP_TIMEOUT)
-    gz = gzip.GzipFile(fileobj=resp)
+    gz = _LimitedReader(gzip.GzipFile(fileobj=resp), MAX_DECOMPRESSED)
 
     chan_to_name = {}   # xmltv channel id -> exact channel name
     name_has_cid = set()  # names that already picked one feed (so +2/+4 feeds don't merge)
     epg = {}
     n_prog = 0
 
-    ctx = ET.iterparse(gz, events=("end",))
+    ctx = safe_iterparse(gz, events=("end",))
     for ev, el in ctx:
         tag = el.tag
         if tag == "channel":

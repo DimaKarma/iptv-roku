@@ -1,7 +1,12 @@
 param(
     [string]$RokuIp = "192.168.5.49",
-    [string]$RokuPass = "REDACTED"
+    [string]$RokuPass = $env:ROKU_PASS
 )
+
+if ([string]::IsNullOrWhiteSpace($RokuPass)) {
+    Write-Error "Set the Roku dev password via -RokuPass <pass> or the ROKU_PASS environment variable."
+    exit 1
+}
 
 Set-Location $PSScriptRoot
 $ZipName = "build.zip"
