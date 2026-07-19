@@ -4,6 +4,7 @@
     <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
     <children>
         <Timer id="epgRefreshTimer" duration="3600" repeat="true" />
+        <Timer id="nowTimer" duration="30" repeat="true" />
         <Rectangle id="background" width="1920" height="1080" color="0x0E1310FF">
             <!-- Loading state -->
             <BusySpinner id="spinner" translation="[960, 480]" visible="true" />

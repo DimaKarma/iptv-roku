@@ -115,13 +115,7 @@ sub performSearch()
 end sub
 
 sub addChannel(parent as object, ch as object, isFav as boolean)
-    item = parent.createChild("ContentNode")
-    item.addField("name", "string", false)
-    item.addField("url", "string", false)
-    item.addField("group", "string", false)
-    item.addField("logo", "string", false)
-    item.addField("compatible", "boolean", false)
-    item.addField("favorite", "boolean", false)
+    item = parent.createChild("ChannelContent")
     
     item.name = ch.name
     item.url = ch.url

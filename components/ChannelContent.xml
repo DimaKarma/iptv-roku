@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="ChannelContent" extends="ContentNode">
+    <interface>
+        <field id="name" type="string" />
+        <field id="url" type="string" />
+        <field id="group" type="string" />
+        <field id="logo" type="string" />
+        <field id="compatible" type="boolean" />
+        <field id="favorite" type="boolean" />
+    </interface>
+</component>
