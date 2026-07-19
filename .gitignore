@@ -10,6 +10,17 @@ resp_shot.txt
 
 # Generated EPG data (published to the epg-data branch, not committed to main)
 epg/epg.json
-epg/__pycache__/
 epg/*.xml
 epg/*.xml.gz
+
+# Python
+__pycache__/
+*.pyc
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/
+*.swp
