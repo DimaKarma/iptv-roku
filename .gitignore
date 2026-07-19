@@ -7,3 +7,9 @@ build.zip
 install_resp.html
 resp_shot.txt
 *.log
+
+# Generated EPG data (published to the epg-data branch, not committed to main)
+epg/epg.json
+epg/__pycache__/
+epg/*.xml
+epg/*.xml.gz

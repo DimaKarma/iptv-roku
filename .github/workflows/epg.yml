@@ -1,0 +1,42 @@
+name: Generate EPG
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'   # every 2 hours (UTC); Actions may delay it by a few minutes
+  workflow_dispatch:          # manual run from the Actions tab
+
+permissions:
+  contents: write
+
+concurrency:
+  group: epg
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generate epg.json
+        working-directory: epg
+        run: python generate_epg.py
+      - name: Publish epg.json to the epg-data branch
+        run: |
+          git config user.name "epg-bot"
+          git config user.email "epg-bot@users.noreply.github.com"
+          cp epg/epg.json "$RUNNER_TEMP/epg.json"
+          git fetch origin epg-data
+          # Work on epg-data in a throwaway worktree so main is never touched.
+          git worktree add -B epg-data "$RUNNER_TEMP/wt" origin/epg-data
+          cp "$RUNNER_TEMP/epg.json" "$RUNNER_TEMP/wt/epg.json"
+          cd "$RUNNER_TEMP/wt"
+          git add epg.json
+          if git diff --cached --quiet; then
+            echo "No EPG changes."
+          else
+            git commit -m "Update EPG $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push origin epg-data
+          fi
