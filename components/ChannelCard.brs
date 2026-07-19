@@ -12,7 +12,9 @@ sub init()
     m.epgLabel = m.top.findNode("epgLabel")
     m.focusBorder = m.top.findNode("focusBorder")
     
-    theme = getTheme()
+    m.theme = m.global.theme
+    if m.theme = invalid then m.theme = getTheme()   ' страховка на ранний старт
+    theme = m.theme
     if theme <> invalid
         m.background.color = theme.colorSurface
         m.nameLabel.color = theme.colorText
@@ -34,7 +36,7 @@ sub onContentChange()
     content = m.top.itemContent
     if content = invalid return
     
-    theme = getTheme()
+    theme = m.theme
     
     ' Set name
     m.nameLabel.text = content.name
@@ -81,7 +83,7 @@ sub updateEpgLabel()
         return
     end if
     
-    info = EpgFind(m.global.epg, m.top.itemContent.name)
+    info = EpgFind(m.global.epg, m.top.itemContent.name, m.global.nowSec)
     if info.now <> invalid
         m.epgLabel.text = info.now.t
     else
@@ -90,7 +92,7 @@ sub updateEpgLabel()
 end sub
 
 sub onFocusChange()
-    theme = getTheme()
+    theme = m.theme
     hasFocus = m.top.focusPercent > 0.5
     m.focusBorder.visible = hasFocus
     

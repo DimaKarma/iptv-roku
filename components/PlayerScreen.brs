@@ -45,12 +45,6 @@ sub init()
     
     m.errorOptions.observeField("itemSelected", "onErrorOptionSelected")
     
-    errContent = CreateObject("roSGNode", "ContentNode")
-    addErrorOption(errContent, "Retry")
-    addErrorOption(errContent, "Next channel")
-    addErrorOption(errContent, "Back")
-    m.errorOptions.content = errContent
-    
     theme = getTheme()
     if theme <> invalid
         m.overlayName.color = theme.colorText
@@ -127,21 +121,53 @@ sub onVideoStateChange()
     end if
 end sub
 
+function buildErrorOptions() as object
+    c = CreateObject("roSGNode", "ContentNode")
+    addErrorOption(c, "Retry")
+    addErrorOption(c, "Next channel")
+    isFav = false
+    if m.currentIndex >= 0 and m.top.playlist <> invalid
+        ch = m.top.playlist[m.currentIndex]
+        if ch <> invalid then isFav = IsFavorite(ch.name)
+    end if
+    if isFav
+        addErrorOption(c, "Remove from favorites")
+    else
+        addErrorOption(c, "Add to favorites")
+    end if
+    addErrorOption(c, "Back")
+    return c
+end function
+
 sub showErrorDialog()
     m.errorMsg.text = "Couldn't play this stream."
+    m.errorOptions.content = buildErrorOptions()
     m.errorDialog.visible = true
     m.errorOptions.setFocus(true)
 end sub
 
 sub onErrorOptionSelected()
     idx = m.errorOptions.itemSelected
-    if idx = 0 ' Повторить
-        if m.currentIndex >= 0
-            playIndex(m.currentIndex)
-        end if
-    else if idx = 1 ' Следующий
+    if idx = 0 ' Retry
+        if m.currentIndex >= 0 then playIndex(m.currentIndex)
+    else if idx = 1 ' Next channel
         zapDown()
-    else if idx = 2 ' Назад
+    else if idx = 2 ' Toggle favorite
+        if m.currentIndex >= 0 and m.top.playlist <> invalid
+            ch = m.top.playlist[m.currentIndex]
+            if ch <> invalid
+                isFav = ToggleFavorite(ch.name)
+                if isFav
+                    showToast("Added to favorites")
+                else
+                    showToast("Removed from favorites")
+                end if
+                ' пересобрать меню (подпись пункта изменилась), диалог оставить открытым
+                m.errorOptions.content = buildErrorOptions()
+                m.errorOptions.setFocus(true)
+            end if
+        end if
+    else if idx = 3 ' Back
         exitPlayer()
     end if
 end sub
@@ -166,7 +192,7 @@ sub updateOverlayData(channel as object)
         m.overlayGroupLabel.text = ""
     end if
     
-    info = EpgFind(m.global.epg, channel.name)
+    info = EpgFind(m.global.epg, channel.name, m.global.nowSec)
     s = ""
     if info.now <> invalid then s = "Now: " + info.now.t + " (" + EpgFmtHM(info.now.s) + "-" + EpgFmtHM(info.now.e) + ")"
     if info.next <> invalid then s = s + "   Next: " + info.next.t
@@ -269,10 +295,7 @@ sub openZapper()
     end if
     
     for each ch in m.top.playlist
-        item = root.createChild("ContentNode")
-        item.addField("name", "string", false)
-        item.addField("favorite", "boolean", false)
-        item.addField("compatible", "boolean", false)
+        item = root.createChild("ChannelContent")
         item.name = ch.name
         item.favorite = (favSet[ch.name] <> invalid)
         item.compatible = (ch.compatible = true)

@@ -64,8 +64,8 @@
         
         <!-- Error Dialog -->
         <Rectangle id="errorDialog"
-                   width="800" height="400"
-                   translation="[560, 340]"
+                   width="800" height="470"
+                   translation="[560, 305]"
                    color="0x18211CFF"
                    visible="false">
             <Label id="errorTitle"

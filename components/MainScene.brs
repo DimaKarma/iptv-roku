@@ -32,6 +32,9 @@ sub init()
     m.epgRefreshTimer = m.top.findNode("epgRefreshTimer")
     m.epgRefreshTimer.observeField("fire", "onEpgRefresh")
     
+    m.top.findNode("nowTimer").observeField("fire", "onNowTick")
+    m.top.findNode("nowTimer").control = "start"
+    
     theme = getTheme()
     if theme <> invalid
         m.background.color = theme.colorBg
@@ -46,6 +49,10 @@ sub init()
     
     if m.global.epg = invalid then m.global.addField("epg", "assocarray", false)
     if m.global.epgReady = invalid then m.global.addField("epgReady", "boolean", false)
+    if m.global.theme = invalid then m.global.addField("theme", "assocarray", false)
+    m.global.theme = getTheme()
+    if m.global.nowSec = invalid then m.global.addField("nowSec", "integer", false)
+    m.global.nowSec = CreateObject("roDateTime").AsSeconds()
 
     runConfigTask()
 end sub
@@ -331,4 +338,8 @@ sub onEpgRefresh()
     if m.currentEpgUrl <> invalid and m.currentEpgUrl <> ""
         startEpgLoad(m.currentEpgUrl)
     end if
+end sub
+
+sub onNowTick()
+    m.global.nowSec = CreateObject("roDateTime").AsSeconds()
 end sub

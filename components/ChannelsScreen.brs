@@ -13,7 +13,6 @@ sub init()
     
     m.categoryList.observeField("itemFocused", "onCategoryFocused")
     m.categoryList.observeField("itemSelected", "onCategorySelected")
-    m.channelGrid.observeField("itemSelected", "onChannelSelected")
     m.toastTimer.observeField("fire", "hideToast")
     m.top.observeField("restoreFocus", "onRestoreFocus")
     
@@ -35,8 +34,13 @@ sub init()
     m.channelsCache = {}
     m.favSet = {}
     m.pendingIdx = -1
+    m.currentCategoryIdx = -1
     m.gridDebounceTimer = m.top.findNode("gridDebounceTimer")
     m.gridDebounceTimer.observeField("fire", "onGridDebounceFire")
+    
+    m.okTimer = m.top.findNode("okTimer")
+    m.okTimer.observeField("fire", "onOkLongPress")
+    m.okLongFired = false
 end sub
 
 sub rebuildFavSet()
@@ -238,6 +242,7 @@ sub onCategorySelected()
 end sub
 
 sub updateGridForCategory(idx as integer)
+    m.currentCategoryIdx = idx
     if m.categoryList.content = invalid then return
     lastIdx = m.categoryList.content.getChildCount() - 1
 
@@ -276,13 +281,7 @@ sub updateGridForCategory(idx as integer)
 end sub
 
 sub addChannel(parent as object, ch as object, isFav as boolean)
-    item = parent.createChild("ContentNode")
-    item.addField("name", "string", false)
-    item.addField("url", "string", false)
-    item.addField("group", "string", false)
-    item.addField("logo", "string", false)
-    item.addField("compatible", "boolean", false)
-    item.addField("favorite", "boolean", false)
+    item = parent.createChild("ChannelContent")
     
     item.name = ch.name
     item.url = ch.url
@@ -292,12 +291,12 @@ sub addChannel(parent as object, ch as object, isFav as boolean)
     item.favorite = isFav
 end sub
 
-sub onChannelSelected()
-    idx = m.channelGrid.itemSelected
-    if m.channelGrid.content = invalid return
+sub playFocusedChannel()
+    if m.channelGrid.content = invalid then return
+    idx = m.channelGrid.itemFocused
     item = m.channelGrid.content.getChild(idx)
-    if item = invalid return
-    
+    if item = invalid then return
+
     if item.compatible
         m.top.playRequest = { channels: m.currentChannels, index: idx }
     else
@@ -307,6 +306,20 @@ end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
     handled = false
+
+    ' Долгий OK по карточке: коротко = играть, долго = избранное (add/remove по разделу)
+    if key = "OK" and m.channelGrid.hasFocus()
+        if press
+            m.okLongFired = false
+            m.okTimer.control = "stop"
+            m.okTimer.control = "start"
+        else
+            m.okTimer.control = "stop"
+            if not m.okLongFired then playFocusedChannel()
+        end if
+        return true
+    end if
+
     if press
         if key = "right"
             if m.categoryList.hasFocus()
@@ -320,7 +333,7 @@ function onKeyEvent(key as string, press as boolean) as boolean
             if m.channelGrid.hasFocus()
                 idx = m.channelGrid.itemFocused
                 if (idx MOD m.gridCols) = 0
-                    catIdx = m.categoryList.itemFocused
+                    catIdx = m.currentCategoryIdx
                     m.gridFocusMemory[catIdx.ToStr()] = idx
                     
                     m.categoryList.setFocus(true)
@@ -336,7 +349,7 @@ function onKeyEvent(key as string, press as boolean) as boolean
                         isFav = ToggleFavorite(item.name)
                         item.favorite = isFav
                         refreshFavState(false)
-                        catIdx = m.categoryList.itemFocused
+                        catIdx = m.currentCategoryIdx
                         if catIdx = 1 and not isFav
                             updateGridForCategory(catIdx)
                             m.channelGrid.setFocus(true)
@@ -370,5 +383,39 @@ sub onRestoreFocus()
         m.channelGrid.setFocus(true)
     else
         m.categoryList.setFocus(true)
+    end if
+end sub
+
+sub onOkLongPress()
+    m.okLongFired = true
+    if not m.channelGrid.hasFocus() then return
+    if m.channelGrid.content = invalid then return
+    idx = m.channelGrid.itemFocused
+    item = m.channelGrid.content.getChild(idx)
+    if item = invalid then return
+
+    catIdx = m.currentCategoryIdx
+    if catIdx = 1
+        ' Раздел Favorites — убрать из избранного
+        if IsFavorite(item.name)
+            ToggleFavorite(item.name)
+            item.favorite = false
+            showToast("Removed from favorites")
+            refreshFavState(false)
+            updateGridForCategory(1)
+            m.channelGrid.setFocus(true)
+            updateCategoryCounts()
+        end if
+    else
+        ' Прочие разделы — добавить в избранное
+        if IsFavorite(item.name)
+            showToast("Already in favorites")
+        else
+            ToggleFavorite(item.name)
+            item.favorite = true
+            showToast("Added to favorites")
+            refreshFavState(false)
+            updateCategoryCounts()
+        end if
     end if
 end sub

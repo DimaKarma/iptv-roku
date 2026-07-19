@@ -63,5 +63,6 @@
         
         <Timer id="toastTimer" duration="2.5" repeat="false" />
         <Timer id="gridDebounceTimer" duration="0.12" repeat="false" />
+        <Timer id="okTimer" duration="0.8" repeat="false" />
     </children>
 </component>

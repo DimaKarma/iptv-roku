@@ -1,10 +1,11 @@
 ' Вернуть {now, next} для канала. epgMap = m.global.epg (может быть invalid).
-function EpgFind(epgMap as object, name as string) as object
+function EpgFind(epgMap as object, name as string, nowSec as dynamic) as object
     res = { now: invalid, next: invalid }
     if epgMap = invalid or name = invalid or name = "" then return res
     list = epgMap[name]
     if list = invalid then return res
-    now = CreateObject("roDateTime").AsSeconds()
+    now = nowSec
+    if now = invalid or now <= 0 then now = CreateObject("roDateTime").AsSeconds()
     for i = 0 to list.Count() - 1
         p = list[i]
         if p.s <= now and now < p.e

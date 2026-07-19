@@ -45,7 +45,7 @@ sub onContentChange()
         m.fallbackBg.opacity = 1.0
     end if
     
-    info = EpgFind(m.global.epg, content.name)
+    info = EpgFind(m.global.epg, content.name, m.global.nowSec)
     if info.now <> invalid
         m.epgLabel.text = info.now.t
     else
