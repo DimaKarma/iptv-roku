@@ -320,7 +320,7 @@ sub closeZapper()
 end sub
 
 sub onZapperFocused()
-    ' activity - restart auto-hide
+    ' activity — restart auto-hide
     if m.zapperPanel.visible
         m.zapperTimer.control = "stop"
         m.zapperTimer.control = "start"
@@ -328,7 +328,7 @@ sub onZapperFocused()
 end sub
 
 sub onZapperSelected()
-    if not m.zapperPanel.visible then return   ' panel hidden - ignore
+    if not m.zapperPanel.visible then return   ' panel hidden — ignore
     idx = m.zapperGrid.itemSelected
     if idx = invalid or m.top.playlist = invalid then return
     if idx < 0 or idx >= m.top.playlist.Count() then return

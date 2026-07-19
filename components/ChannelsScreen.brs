@@ -246,7 +246,7 @@ sub updateGridForCategory(idx as integer)
     if m.categoryList.content = invalid then return
     lastIdx = m.categoryList.content.getChildCount() - 1
 
-    ' Search / Settings - empty grid (cheap, not cached)
+    ' Search / Settings — empty grid (cheap, not cached)
     if idx = 0 or idx = lastIdx
         m.channelGrid.content = CreateObject("roSGNode", "ContentNode")
         m.currentChannels = []
@@ -396,7 +396,7 @@ sub onOkLongPress()
 
     catIdx = m.currentCategoryIdx
     if catIdx = 1
-        ' Favorites category - remove from favorites
+        ' Favorites category — remove from favorites
         if IsFavorite(item.name)
             ToggleFavorite(item.name)
             item.favorite = false
@@ -407,7 +407,7 @@ sub onOkLongPress()
             updateCategoryCounts()
         end if
     else
-        ' Other categories - add to favorites
+        ' Other categories — add to favorites
         if IsFavorite(item.name)
             showToast("Already in favorites")
         else
