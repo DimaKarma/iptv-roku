@@ -104,7 +104,7 @@
         <Timer id="clockTimer" duration="30.0" repeat="true" />
         <Timer id="okTimer" duration="0.8" repeat="false" />
         
-        <!-- Zapper panel (вертикальный список справа) -->
+        <!-- Zapper panel (vertical list on the right) -->
         <Rectangle id="zapperPanel"
                    width="560" height="1080"
                    translation="[1360, 0]"

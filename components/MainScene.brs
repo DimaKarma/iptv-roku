@@ -307,7 +307,7 @@ function onKeyEvent(key as string, press as boolean) as boolean
     return handled
 end function
 
-' epoch (int/float/строка) -> "YYYY-MM-DD HH:MM" локального времени; иначе ""
+' epoch (int/float/string) -> "YYYY-MM-DD HH:MM" in local time; otherwise ""
 function fmtEpochLocal(v as dynamic) as string
     if v = invalid then return ""
     if GetInterface(v, "ifString") <> invalid then return v

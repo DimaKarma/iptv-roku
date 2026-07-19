@@ -58,8 +58,8 @@ sub clearGridCache()
     m.channelsCache = {}
 end sub
 
-' Обновить состояние избранного без полного сброса кэша.
-' dropRecent=true — дополнительно инвалидировать Recent (после плеера).
+' Refresh favorite state without clearing the whole cache.
+' dropRecent=true also invalidates Recent (after the player).
 sub refreshFavState(dropRecent as boolean)
     rebuildFavSet()
     keysToDrop = ["1"]
@@ -246,7 +246,7 @@ sub updateGridForCategory(idx as integer)
     if m.categoryList.content = invalid then return
     lastIdx = m.categoryList.content.getChildCount() - 1
 
-    ' Search / Settings — пустая сетка (дёшево, не кэшируем)
+    ' Search / Settings — empty grid (cheap, not cached)
     if idx = 0 or idx = lastIdx
         m.channelGrid.content = CreateObject("roSGNode", "ContentNode")
         m.currentChannels = []
@@ -307,7 +307,7 @@ end sub
 function onKeyEvent(key as string, press as boolean) as boolean
     handled = false
 
-    ' Долгий OK по карточке: коротко = играть, долго = избранное (add/remove по разделу)
+    ' Long OK on a card: short = play, long = favorite (add/remove by category)
     if key = "OK" and m.channelGrid.hasFocus()
         if press
             m.okLongFired = false
@@ -396,7 +396,7 @@ sub onOkLongPress()
 
     catIdx = m.currentCategoryIdx
     if catIdx = 1
-        ' Раздел Favorites — убрать из избранного
+        ' Favorites category — remove from favorites
         if IsFavorite(item.name)
             ToggleFavorite(item.name)
             item.favorite = false
@@ -407,7 +407,7 @@ sub onOkLongPress()
             updateCategoryCounts()
         end if
     else
-        ' Прочие разделы — добавить в избранное
+        ' Other categories — add to favorites
         if IsFavorite(item.name)
             showToast("Already in favorites")
         else

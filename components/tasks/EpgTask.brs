@@ -1,4 +1,4 @@
-' EpgTask: скачивает epg.json, кэширует, парсит
+' EpgTask: downloads epg.json, caches it, parses it
 
 sub init()
     m.top.functionName = "runEpg"

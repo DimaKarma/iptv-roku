@@ -109,7 +109,7 @@ function PushRecent(name as string) as void
     SaveRecents(recents)
 end function
 
-' Старые записи — URL (содержат "://"). Конвертировать по текущему плейлисту, несматченные отбросить.
+' Old entries are URLs (contain "://"). Convert them using the current playlist; drop unmatched.
 sub MigrateStoreToNames(channels as object)
     if channels = invalid then return
     urlToName = {}
@@ -132,7 +132,7 @@ sub migrateList(key as string, urlToName as object)
         val = entry
         if entry.Instr("://") >= 0
             changed = true
-            val = urlToName[entry]   ' invalid, если канал исчез
+            val = urlToName[entry]   ' invalid if the channel is gone
         end if
         if val <> invalid and seen[val] = invalid
             seen[val] = true

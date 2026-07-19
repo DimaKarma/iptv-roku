@@ -162,7 +162,7 @@ sub onErrorOptionSelected()
                 else
                     showToast("Removed from favorites")
                 end if
-                ' пересобрать меню (подпись пункта изменилась), диалог оставить открытым
+                ' rebuild the menu (option label changed), keep the dialog open
                 m.errorOptions.content = buildErrorOptions()
                 m.errorOptions.setFocus(true)
             end if
@@ -280,10 +280,10 @@ end sub
 
 sub openZapper()
     if m.top.playlist = invalid or m.top.playlist.Count() = 0 then return
-    ' спрятать оверлей/баннер
+    ' hide overlay/banner
     hideOverlay()
     hideMiniBanner()
-    ' собрать content из текущей категории
+    ' build content from the current category
     root = CreateObject("roSGNode", "ContentNode")
     
     favSet = {}
@@ -303,7 +303,7 @@ sub openZapper()
     m.zapperGrid.content = root
     if m.currentIndex >= 0 then m.zapperGrid.jumpToItem = m.currentIndex
     m.zapperPanel.visible = true
-    m.zapperGrid.setFocus(true)         ' фокус на СЕТКУ, не на панель (правило #9)
+    m.zapperGrid.setFocus(true)         ' focus the GRID, not the panel (rule #9)
     m.zapperTimer.control = "start"
 end sub
 
@@ -320,7 +320,7 @@ sub closeZapper()
 end sub
 
 sub onZapperFocused()
-    ' активность — перезапустить авто-скрытие
+    ' activity — restart auto-hide
     if m.zapperPanel.visible
         m.zapperTimer.control = "stop"
         m.zapperTimer.control = "start"
@@ -328,7 +328,7 @@ sub onZapperFocused()
 end sub
 
 sub onZapperSelected()
-    if not m.zapperPanel.visible then return   ' <-- ДОБАВИТЬ: панель скрыта — игнор
+    if not m.zapperPanel.visible then return   ' panel hidden — ignore
     idx = m.zapperGrid.itemSelected
     if idx = invalid or m.top.playlist = invalid then return
     if idx < 0 or idx >= m.top.playlist.Count() then return
@@ -336,10 +336,10 @@ sub onZapperSelected()
     if ch = invalid then return
     if ch.compatible <> true
         showToast("Stream not supported")
-        return                          ' панель НЕ закрываем, канал НЕ меняем
+        return                          ' keep the panel open, don't change channel
     end if
     closeZapper()
-    playIndex(idx)                      ' playIndex сам ставит фокус плееру и обновляет всё
+    playIndex(idx)                      ' playIndex focuses the player and updates everything
 end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
@@ -352,9 +352,9 @@ function onKeyEvent(key as string, press as boolean) as boolean
                 closeZapper()
                 handled = true
             else if key = "up" or key = "down" or key = "OK"
-                handled = false                 ' навигация и выбор — сетке
+                handled = false                 ' navigation and select go to the grid
             else if key = "left" or key = "right" or key = "options"
-                handled = true                  ' глушим
+                handled = true                  ' swallow
             end if
         else
             if key = "back" or key = "left" or key = "right" or key = "options"

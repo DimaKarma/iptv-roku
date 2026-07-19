@@ -10,7 +10,7 @@
     </interface>
     
     <children>
-        <!-- маленькая цветная плашка-инициалы слева -->
+        <!-- small colored initials tile on the left -->
         <Rectangle id="fallbackBg" width="72" height="72" translation="[8, 8]">
             <Label id="fallbackLabel" width="72" height="72" horizAlign="center" vertAlign="center" />
         </Rectangle>
@@ -21,7 +21,7 @@
         <Label id="favStar" text="★" translation="[490, 10]" color="0x74D45BFF" visible="false" />
         <Rectangle id="badge" width="20" height="20" translation="[490, 50]" visible="false" />
 
-        <!-- рамка фокуса под строку 520×88 -->
+        <!-- focus border for the 520×88 row -->
         <Group id="focusBorder" visible="false">
             <Rectangle width="528" height="4" translation="[-4, -4]" color="0x4FB03AFF" />
             <Rectangle width="528" height="4" translation="[-4, 88]" color="0x4FB03AFF" />

@@ -1,7 +1,7 @@
-# Секреты: реальный config.json содержит URL плейлиста с токеном подписки
+# Secrets: the real config.json contains the playlist URL with a subscription token
 config.json
 
-# Артефакты сборки/деплоя
+# Build/deploy artifacts
 build.zip
 *.zip
 install_resp.html

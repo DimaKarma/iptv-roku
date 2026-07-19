@@ -91,7 +91,7 @@ sub runPlaylist()
                         p2 = ParseM3U(body2)
                         addedCount = 0
                         for each ch in p2.channels
-                            ch.group = exCat            ' перекрываем group -> "Sport2"
+                            ch.group = exCat            ' override group -> "Sport2"
                             parsed.channels.Push(ch)
                             addedCount = addedCount + 1
                         end for

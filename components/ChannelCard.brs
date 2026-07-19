@@ -13,7 +13,7 @@ sub init()
     m.focusBorder = m.top.findNode("focusBorder")
     
     m.theme = m.global.theme
-    if m.theme = invalid then m.theme = getTheme()   ' страховка на ранний старт
+    if m.theme = invalid then m.theme = getTheme()   ' fallback for early init
     theme = m.theme
     if theme <> invalid
         m.background.color = theme.colorSurface

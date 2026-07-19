@@ -1,4 +1,4 @@
-' Вернуть {now, next} для канала. epgMap = m.global.epg (может быть invalid).
+' Return {now, next} for a channel. epgMap = m.global.epg (may be invalid).
 function EpgFind(epgMap as object, name as string, nowSec as dynamic) as object
     res = { now: invalid, next: invalid }
     if epgMap = invalid or name = invalid or name = "" then return res
@@ -20,7 +20,7 @@ function EpgFind(epgMap as object, name as string, nowSec as dynamic) as object
     return res
 end function
 
-' Unix UTC epoch -> "HH:MM" локального времени ТВ.
+' Unix UTC epoch -> "HH:MM" in the TV's local time.
 function EpgFmtHM(epoch as integer) as string
     dt = CreateObject("roDateTime")
     dt.FromSeconds(epoch)
