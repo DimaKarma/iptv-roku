@@ -5,6 +5,7 @@ sub init()
     m.statusLabel = m.top.findNode("statusLabel")
     m.errorLabel = m.top.findNode("errorLabel")
     m.errorHintLabel = m.top.findNode("errorHintLabel")
+    m.brandGroup = m.top.findNode("brandGroup")
     
     m.channelsScreen = m.top.findNode("channelsScreen")
     m.playerScreen = m.top.findNode("playerScreen")
@@ -135,6 +136,7 @@ sub hideAllScreens()
     m.statusLabel.visible = false
     m.errorLabel.visible = false
     m.errorHintLabel.visible = false
+    m.brandGroup.visible = false
     
     m.channelsScreen.visible = false
     m.playerScreen.visible = false
@@ -145,6 +147,7 @@ end sub
 
 sub showLoading(text as string)
     hideAllScreens()
+    m.brandGroup.visible = true
     m.spinner.visible = true
     m.spinner.control = "start"
     m.statusLabel.visible = true
@@ -153,6 +156,7 @@ end sub
 
 sub showError(errText as string)
     hideAllScreens()
+    m.brandGroup.visible = true
     m.errorLabel.visible = true
     m.errorLabel.text = errText
     m.errorHintLabel.visible = true
