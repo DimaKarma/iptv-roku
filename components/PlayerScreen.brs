@@ -224,11 +224,11 @@ sub onOkLongPress()
     if m.currentIndex < 0 or m.top.playlist = invalid then return
     ch = m.top.playlist[m.currentIndex]
     if ch = invalid then return
-    if IsFavorite(ch.name)
-        showToast("Already in favorites")
-    else
-        ToggleFavorite(ch.name)
+    isFav = ToggleFavorite(ch.name)
+    if isFav
         showToast("Added to favorites")
+    else
+        showToast("Removed from favorites")
     end if
 end sub
 

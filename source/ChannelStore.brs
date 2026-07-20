@@ -22,6 +22,7 @@ function SaveFavorites(favs as object) as void
         json = FormatJson(favs)
         sec.Write("favorites", json)
         sec.Flush()
+        WriteAsciiFile("cachefs:/fav_backup.json", json)
     end if
 end function
 
@@ -80,6 +81,7 @@ function SaveRecents(recents as object) as void
         json = FormatJson(recents)
         sec.Write("recents", json)
         sec.Flush()
+        WriteAsciiFile("cachefs:/rec_backup.json", json)
     end if
 end function
 
@@ -143,4 +145,36 @@ sub migrateList(key as string, urlToName as object)
         sec.Write(key, FormatJson(result))
         sec.Flush()
     end if
+end sub
+
+' Restore a registry list from its cachefs shadow if the registry key is empty.
+' NOTE: runs on the render thread (called from onPlaylistChange) — must NOT create
+' roFileSystem there. ReadAsciiFile is a global function and works on the render thread;
+' it returns "" for a missing file, which we treat as "no backup".
+sub restoreListFromBackup(key as string, backupPath as string)
+    sec = getRegistrySection()
+    if sec = invalid then return
+
+    ' Is the registry list currently empty?
+    regEmpty = true
+    if sec.Exists(key)
+        cur = ParseJson(sec.Read(key))
+        if cur <> invalid and cur.Count() > 0 then regEmpty = false
+    end if
+    if not regEmpty then return   ' registry has data — it is authoritative, do nothing
+
+    ' Registry empty: try to restore from the shadow file.
+    body = ReadAsciiFile(backupPath)
+    if body = invalid or body = "" then return
+    parsed = ParseJson(body)
+    if parsed = invalid or parsed.Count() = 0 then return
+
+    sec.Write(key, FormatJson(parsed))
+    sec.Flush()
+end sub
+
+' Restore favorites and recents from their cachefs shadows if the registry was wiped.
+sub RestoreStoreFromBackup()
+    restoreListFromBackup("favorites", "cachefs:/fav_backup.json")
+    restoreListFromBackup("recents", "cachefs:/rec_backup.json")
 end sub
