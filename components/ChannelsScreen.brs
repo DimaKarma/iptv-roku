@@ -298,6 +298,8 @@ sub playFocusedChannel()
     if item = invalid then return
 
     if item.compatible
+        ' remember where we were so Back from the player returns to this channel
+        m.gridFocusMemory[m.currentCategoryIdx.ToStr()] = idx
         m.top.playRequest = { channels: m.currentChannels, index: idx }
     else
         showToast("Stream not supported")
@@ -377,7 +379,8 @@ end sub
 sub onRestoreFocus()
     refreshFavState(true)
     updateCategoryCounts()
-    curIdx = m.categoryList.itemFocused
+    curIdx = m.currentCategoryIdx
+    if curIdx < 0 then curIdx = m.categoryList.itemFocused
     updateGridForCategory(curIdx)
     if m.channelGrid.content <> invalid and m.channelGrid.content.getChildCount() > 0
         m.channelGrid.setFocus(true)
