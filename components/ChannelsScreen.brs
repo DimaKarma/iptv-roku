@@ -146,7 +146,6 @@ sub onPlaylistChange()
     res = m.top.playlistResult
     if res = invalid return
     
-    RestoreStoreFromBackup()
     MigrateStoreToNames(res.channels)
     
     buildCategories()
