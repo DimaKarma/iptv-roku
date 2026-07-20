@@ -32,6 +32,23 @@
                    horizAlign="center"
                    visible="false" />
                    
+            <!-- Splash branding (visible on loading / error) -->
+            <Group id="brandGroup" visible="true">
+                <Label text="IPTV Player"
+                       translation="[0, 330]"
+                       color="0xECF2EEFF"
+                       width="1920"
+                       horizAlign="center" />
+                <Rectangle translation="[890, 405]" width="140" height="4" color="0x4FB03AFF" />
+                <Label text="(c) 2026 DimaKarma"
+                       translation="[0, 1000]"
+                       color="0x8A968EFF"
+                       width="1920"
+                       horizAlign="center"
+                       scale="[0.7,0.7]"
+                       scaleRotateCenter="[960,0]" />
+            </Group>
+                   
             <!-- Main Content -->
             <ChannelsScreen id="channelsScreen" visible="false" />
             <PlayerScreen id="playerScreen" visible="false" />
