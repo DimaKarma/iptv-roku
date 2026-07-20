@@ -88,7 +88,9 @@ sub playIndex(idx as integer)
     m.video.content = node
     m.video.control = "play"
     
-    PushRecent(channel.name)
+    if not IsAdultGroup(channel.group)
+        PushRecent(channel.name)
+    end if
     
     m.errorDialog.visible = false
     
