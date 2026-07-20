@@ -144,3 +144,33 @@ sub migrateList(key as string, urlToName as object)
         sec.Flush()
     end if
 end sub
+
+' "Взрослые" is the provider's adult category name (#EXTGRP) — a data literal, not UI text.
+function IsAdultGroup(group as dynamic) as boolean
+    if group = invalid then return false
+    return group = "Взрослые"
+end function
+
+' Remove any already-stored Recent entries whose channel is in the adult group.
+sub PurgeAdultFromRecents(channels as object)
+    if channels = invalid then return
+    adult = {}
+    for each ch in channels
+        if ch.name <> invalid and IsAdultGroup(ch.group) then adult[ch.name] = true
+    end for
+
+    recents = LoadRecents()
+    if recents = invalid or recents.Count() = 0 then return
+
+    result = []
+    changed = false
+    for each r in recents
+        if adult[r] <> invalid
+            changed = true          ' drop this adult entry
+        else
+            result.Push(r)
+        end if
+    end for
+
+    if changed then SaveRecents(result)
+end sub

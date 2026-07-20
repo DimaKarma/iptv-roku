@@ -147,6 +147,7 @@ sub onPlaylistChange()
     if res = invalid return
     
     MigrateStoreToNames(res.channels)
+    PurgeAdultFromRecents(res.channels)
     
     buildCategories()
     clearGridCache()
