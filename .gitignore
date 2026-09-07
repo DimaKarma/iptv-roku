@@ -24,3 +24,7 @@ Desktop.ini
 .vscode/
 .idea/
 *.swp
+
+# Local agent state and isolated working trees
+.agent-memory/
+.worktrees/
