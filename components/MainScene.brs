@@ -80,17 +80,18 @@ sub onConfigLoaded()
     end if
     
     if url <> ""
-        startPlaylistLoad(url)
+        startPlaylistLoad(url, false)
     else
         showOnboarding()
     end if
 end sub
 
-sub startPlaylistLoad(url as string)
+sub startPlaylistLoad(url as string, forceReload as boolean)
     showLoading("Loading playlist…")
     m.currentUrl = url
     m.playlistTask = CreateObject("roSGNode", "PlaylistTask")
     m.playlistTask.playlistUrl = url
+    m.playlistTask.forceReload = forceReload
     m.playlistTask.observeField("status", "onPlaylistStatus")
     if m.configCache <> invalid and m.configCache.extraPlaylists <> invalid
         m.playlistTask.extraPlaylists = m.configCache.extraPlaylists
@@ -174,7 +175,7 @@ sub onOnboardingSave()
         sec = CreateObject("roRegistrySection", "settings")
         sec.Write("playlistUrl", url)
         sec.Flush()
-        startPlaylistLoad(url)
+        startPlaylistLoad(url, false)
     end if
 end sub
 
@@ -244,10 +245,12 @@ end sub
 
 sub onSettingsAction()
     action = m.settingsScreen.action
-    if action = "refresh" or action = "clearCache"
-        startPlaylistLoad(m.currentUrl)
+    if action = "refresh"
+        startPlaylistLoad(m.currentUrl, true)
+    else if action = "clearCache"
+        startPlaylistLoad(m.currentUrl, false)
     else if action = "urlChanged"
-        startPlaylistLoad(m.settingsScreen.newUrl)
+        startPlaylistLoad(m.settingsScreen.newUrl, false)
     else if action = "epgChanged"
         startEpgLoad(m.settingsScreen.newUrl)
     end if
@@ -299,7 +302,7 @@ function onKeyEvent(key as string, press as boolean) as boolean
         else if key = "OK"
             if m.errorLabel.visible
                 if m.currentUrl <> invalid and m.currentUrl <> ""
-                    startPlaylistLoad(m.currentUrl)
+                    startPlaylistLoad(m.currentUrl, false)
                     handled = true
                 else
                     runConfigTask()
