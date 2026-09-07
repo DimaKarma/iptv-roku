@@ -5,6 +5,7 @@
     <interface>
         <field id="extraPlaylists" type="array" />
         <field id="playlistUrl" type="string" />
+        <field id="forceReload" type="boolean" />
         <field id="result" type="assocarray" />
         <field id="status" type="string" />
         <field id="error" type="string" />

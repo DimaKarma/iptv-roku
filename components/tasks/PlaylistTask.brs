@@ -40,7 +40,7 @@ sub runPlaylist()
     http.InitClientCertificates()
     http.RetainBodyOnError(true)
     
-    if meta <> invalid and meta.sourceUrl <> invalid and meta.sourceUrl = url
+    if not m.top.forceReload and meta <> invalid and meta.sourceUrl <> invalid and meta.sourceUrl = url
         if meta.etag <> invalid and meta.etag <> ""
             http.AddHeader("If-None-Match", meta.etag)
         end if
