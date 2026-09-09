@@ -86,4 +86,26 @@ Describe 'Deploy gates contract' {
         $pkg = Get-Content -Raw (Join-Path $projectRoot 'package.json') | ConvertFrom-Json
         $pkg.devDependencies.brighterscript | Should Match '^\d+\.\d+\.\d+$'
     }
+
+    It 'dispatches the error menu by action, never by a hardcoded index' {
+        # The error dialog's menu is VARIABLE LENGTH -- the favourite row is built only for
+        # a channel that already is one. An index-based dispatch therefore moves "Back"
+        # from 3 to 2 whenever that row is absent: Back stops working and index 2 toggles
+        # favourites on a channel that has none.
+        #
+        # What this test can and cannot do: it greps the source, so it goes red only if
+        # someone reintroduces the literal-index shape. It proves nothing about runtime
+        # behaviour, and a reformat could evade it. It exists because this defect is
+        # invisible in a screenshot and expensive to reach on the device -- it needs a dead
+        # stream that is also a favourite.
+        $player = Get-Content -Raw (Join-Path $projectRoot 'components\PlayerScreen.brs')
+
+        $player | Should Match 'm\.errorActions'
+        # Positive control: the file really was read and the matcher really can hit.
+        $player | Should Match 'sub onErrorOptionSelected'
+
+        $dispatch = $player.Substring($player.IndexOf('sub onErrorOptionSelected'))
+        $dispatch = $dispatch.Substring(0, $dispatch.IndexOf('end sub'))
+        ($dispatch -match 'idx\s*=\s*\d') | Should Be $false
+    }
 }
