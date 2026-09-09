@@ -132,20 +132,44 @@ def clean_title(s):
     return cleaned, cleaned != s
 
 
+# Why a dict and not three module-level ints: a dict is mutable, so the counters can be
+# incremented from inside the function without a `global` declaration, and a test can
+# reset them by assigning fresh values.
+PARSE_FAILURES = {"absent": 0, "malformed": 0, "exception": 0}
+
+
 def parse_xmltv_time(t):
-    """'20260716120000 +0300' -> utc epoch (int)."""
-    t = (t or "").strip()
-    if len(t) < 14:
+    """'20260716120000 +0300' -> utc epoch (int), or None if it cannot be parsed.
+
+    Never raises. One bad timestamp in a 46 MB feed used to abort the entire run, and an
+    aborted run publishes nothing -- which after ~18 hours is a blank guide on the TV,
+    the July 2026 outage. A dropped programme is strictly better than a dropped guide.
+
+    The three failure kinds are counted separately because they mean different things:
+    an absent attribute is upstream sloppiness, a short value is a format change, and an
+    exception is a value shaped right but not parseable. Counting them together would
+    hide a format change behind ordinary noise.
+    """
+    if t is None or not t.strip():
+        PARSE_FAILURES["absent"] += 1
         return None
-    dt = datetime.strptime(t[:14], "%Y%m%d%H%M%S")
-    epoch = int(dt.replace(tzinfo=timezone.utc).timestamp())
-    # apply the timezone offset if present ('+0300' / '-0500')
-    rest = t[14:].strip()
-    if len(rest) >= 5 and rest[0] in '+-':
-        sign = 1 if rest[0] == '+' else -1
-        off = int(rest[1:3]) * 3600 + int(rest[3:5]) * 60
-        epoch -= sign * off
-    return epoch
+    t = t.strip()
+    if len(t) < 14:
+        PARSE_FAILURES["malformed"] += 1
+        return None
+    try:
+        dt = datetime.strptime(t[:14], "%Y%m%d%H%M%S")
+        epoch = int(dt.replace(tzinfo=timezone.utc).timestamp())
+        # apply the timezone offset if present ('+0300' / '-0500')
+        rest = t[14:].strip()
+        if len(rest) >= 5 and rest[0] in '+-':
+            sign = 1 if rest[0] == '+' else -1
+            off = int(rest[1:3]) * 3600 + int(rest[3:5]) * 60
+            epoch -= sign * off
+        return epoch
+    except (ValueError, TypeError):
+        PARSE_FAILURES["exception"] += 1
+        return None
 
 
 def main():
@@ -209,6 +233,33 @@ def main():
     for nm in epg:
         epg[nm].sort(key=lambda p: p["s"])
 
+    # Report BEFORE the floor check, so a REFUSED run still explains itself. Previously a
+    # refusal printed only the refusal, and the timestamp counters are exactly what
+    # distinguishes "channels.txt drifted" from "the feed changed its date format" --
+    # the two produce the same collapsed channel count.
+    n_failed = sum(PARSE_FAILURES.values())
+    print("Matched channels with EPG: %d / %d" % (len(epg), len(names)))
+    print("Programmes in window: %d" % n_prog)
+    print("Titles cleaned of unrenderable characters: %d" % n_cleaned)
+    print("Failed timestamp parses: %d (absent %d, malformed %d, exception %d)"
+          % (n_failed, PARSE_FAILURES["absent"], PARSE_FAILURES["malformed"],
+             PARSE_FAILURES["exception"]))
+    if n_failed:
+        # Counts PARSE CALLS, not programmes: parse_xmltv_time runs twice per programme
+        # (start and stop), so one bad record can add two. Only matched channels are
+        # parsed at all, so failures on channels we do not carry are invisible here.
+        print("  (these are parse calls, two per programme; only matched channels are parsed)")
+
+    # Deliberately NO second exit condition on the failure count. A whole-feed format
+    # change makes every timestamp fail, every channel drop out, and the floor below
+    # fires on its own. A threshold tuned above that would only ever fire on noise: one
+    # single channel carries up to 3.6% of all programmes, so any percentage small
+    # enough to be meaningful is smaller than one channel.
+    #
+    # The exposure this leaves, stated plainly rather than discovered later: the floor is
+    # a ratio of channels, so roughly a third of the working guide can go dark and the
+    # run still publishes and exits 0. The counters above are the only warning of that.
+    #
     # Check BEFORE writing, so a rejected run leaves no partial epg.json on disk for
     # the publish step to pick up. A non-zero exit aborts the workflow job before its
     # publish step, so the last good file on the epg-data branch survives untouched.
@@ -229,9 +280,6 @@ def main():
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
 
     size = os.path.getsize(out_path)
-    print("Matched channels with EPG: %d / %d" % (len(epg), len(names)))
-    print("Programmes in window: %d" % n_prog)
-    print("Titles cleaned of unrenderable characters: %d" % n_cleaned)
     print("epg.json size: %.2f MB" % (size / 1024.0 / 1024.0))
 
 

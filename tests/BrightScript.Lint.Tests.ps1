@@ -55,3 +55,35 @@ Describe 'Registry seed contract' {
         $screen | Should Match '(?s)RestoreStoreIfEmpty\(\)\s+MigrateStoreToNames'
     }
 }
+
+Describe 'Deploy gates contract' {
+    # These assert the SHAPE of deploy.ps1, because a gate that is quietly deleted leaves
+    # a green suite behind it. Cheap insurance on the two checks that stand between a
+    # syntax error and a wiped registry.
+    It 'compile-checks before it packages or contacts the TV' {
+        $deploy = Get-Content -Raw (Join-Path $projectRoot 'deploy.ps1')
+
+        $deploy | Should Match 'Test-BrightScriptCompiles'
+        # Order matters: the compile check must come before tar.exe and before curl.
+        $iCompile = $deploy.IndexOf('Test-BrightScriptCompiles')
+        $iTar = $deploy.IndexOf('tar.exe')
+        $iCurl = $deploy.IndexOf('curl.exe')
+        ($iCompile -lt $iTar -and $iCompile -lt $iCurl) | Should Be $true
+    }
+
+    It 'captures the store and refreshes the seed BEFORE packaging' {
+        # Built first and captured second, the shipped source/restore.json was always one
+        # deploy stale, so a registry wipe restored last time's favourites.
+        $deploy = Get-Content -Raw (Join-Path $projectRoot 'deploy.ps1')
+
+        $iSave = $deploy.IndexOf('Save-RokuStore')
+        $iSeed = $deploy.IndexOf('Update-RestoreSeed')
+        $iTar = $deploy.IndexOf('tar.exe')
+        ($iSave -gt 0 -and $iSeed -gt $iSave -and $iSeed -lt $iTar) | Should Be $true
+    }
+
+    It 'pins the compiler version rather than floating it' {
+        $pkg = Get-Content -Raw (Join-Path $projectRoot 'package.json') | ConvertFrom-Json
+        $pkg.devDependencies.brighterscript | Should Match '^\d+\.\d+\.\d+$'
+    }
+}

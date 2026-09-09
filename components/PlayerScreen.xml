@@ -12,9 +12,17 @@
     </interface>
     
     <children>
+        <!-- enableUI="false": this app draws its own player UI (the zap banner, the OK
+             overlay with the channel name and clock, the error dialog), and Roku's
+             built-in one duplicated all of it, including a white buffering spinner
+             next to our green one, and a second title and clock along the top edge.
+             Trickplay is irrelevant here: these are live streams, there is nothing to
+             seek. Per the Roku docs this hides "most of" the Video node UI, so whether
+             the white spinner is included has to be confirmed on the device. -->
         <Video id="video"
                width="1920" height="1080"
                translation="[0, 0]"
+               enableUI="false"
                visible="true" />
                
         <!-- Spinner & Loading text -->

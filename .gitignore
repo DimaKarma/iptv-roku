@@ -38,3 +38,7 @@ source/restore.json
 
 # Favorites/recents captured from the TV before each sideload (contains channel names)
 backups/
+
+# Dev tooling only: the BrightScript compiler used as a pre-deploy gate.
+# Restore it with `npm ci`; nothing in here reaches the TV build.
+node_modules/
