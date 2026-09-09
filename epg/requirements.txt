@@ -1,1 +1,19 @@
-defusedxml>=0.7.1
+# Pinned exactly, with hashes, because this file is installed unattended.
+#
+# The EPG workflow runs on a two-hourly cron in a job that holds contents:write on this
+# repository. A floating lower bound (`defusedxml>=0.7.1`) means a malicious release
+# published to PyPI would be installed automatically, within two hours, into a job that
+# can push to the default branch -- with no human in the loop to notice. The exact pin
+# plus --require-hashes (see .github/workflows/epg.yml) removes that precondition: pip
+# refuses anything whose contents do not match.
+#
+# Both digests are listed so pip may satisfy the requirement from either the wheel or the
+# sdist. To move the pin, take the new version's digests from
+# https://pypi.org/pypi/defusedxml/json and replace both lines.
+#
+# Honest scope: this closes the one plausible code-execution link, not the whole chain.
+# `runs-on: ubuntu-latest` is a mutable image and actions/setup-python fetches an unpinned
+# CPython and its bundled pip at run time.
+defusedxml==0.7.1 \
+    --hash=sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61 \
+    --hash=sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69

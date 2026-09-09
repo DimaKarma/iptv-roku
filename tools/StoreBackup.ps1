@@ -32,7 +32,36 @@ function Save-RokuStore {
         $stream = $client.GetStream()
 
         # Relaunch so the app re-runs its playlist load and prints the store again.
-        # Failure here is not fatal: the channel may already be starting.
+        #
+        # /launch/dev does NOT restart a channel that is already running -- it is a no-op,
+        # the app never re-runs its playlist load, no [STORE] lines appear, and this
+        # function then times out after $TimeoutSeconds and refuses the whole deploy. That
+        # failure has nothing to do with safety, and its message points the operator at
+        # -SkipStoreBackup: the one flag that disables the only backup there is. So press
+        # Home first, but only when the dev channel is the thing running -- Home is
+        # otherwise a pointless poke at whatever the owner was watching.
+        #
+        # Every step here is best-effort. This whole file runs under
+        # $ErrorActionPreference = "Stop", so each ECP call needs its own try/catch or a
+        # single unreachable request would abort a deploy that could still have succeeded
+        # by reading a console the channel was about to write to anyway.
+        try {
+            $active = Invoke-WebRequest -Uri "http://${host_}:8060/query/active-app" `
+                -TimeoutSec 5 -UseBasicParsing
+            if ($active.Content -match 'id="dev"') {
+                Write-Host "  (dev channel already running; pressing Home so the relaunch takes)"
+                try {
+                    Invoke-WebRequest -Uri "http://${host_}:8060/keypress/Home" -Method POST `
+                        -TimeoutSec 5 -UseBasicParsing | Out-Null
+                    Start-Sleep -Milliseconds 1500
+                } catch {
+                    Write-Host "  (Home keypress failed; launching anyway)"
+                }
+            }
+        } catch {
+            Write-Host "  (could not read active-app; launching anyway)"
+        }
+
         try {
             Invoke-WebRequest -Uri "http://${host_}:8060/launch/dev" -Method POST `
                 -TimeoutSec 10 -UseBasicParsing | Out-Null
@@ -68,8 +97,9 @@ function Save-RokuStore {
 
         if ($null -eq $favorites -or $null -eq $recents) {
             throw ("No [STORE] lines appeared on the console within $TimeoutSeconds s. " +
-                   "The build currently on the TV predates the store dump, or the channel " +
-                   "did not reach its playlist load.")
+                   "Either the build currently on the TV predates the store dump, or the " +
+                   "channel did not reach its playlist load, or it was already running and " +
+                   "the relaunch did not restart it.")
         }
 
         # Parse to prove it is real JSON before calling it a backup. An unparseable
@@ -130,23 +160,64 @@ function Update-RestoreSeed {
         return $false
     }
 
+    # Serialise with -InputObject, never through the pipeline. A PIPELINE UNROLLS the
+    # array, so `@("Only") | ConvertTo-Json` emits the bare string "Only" instead of
+    # ["Only"], and `@() | ConvertTo-Json` emits NOTHING AT ALL -- which produced
+    # `"recents": ` with no value and a syntactically invalid seed. Both measured on
+    # PS 5.1 here; -InputObject gives ["Only"] and [] respectively.
+    #
+    # This matters more than it looks. The one-favourite case is exactly the state after
+    # a registry wipe, when the owner has re-added a single channel -- the moment the
+    # seed is the only copy of anything.
+    $favJson = ConvertTo-Json -InputObject @($favorites) -Compress -Depth 3
+    $recJson = ConvertTo-Json -InputObject @($recents) -Compress -Depth 3
+
     $json = "{`n" +
             "  ""note"": ""One-shot seed. ChannelStore.RestoreStoreIfEmpty writes a list back only when that registry key is empty, so this file is inert once the store is populated."",`n" +
             "  ""capturedAt"": ""$($store.capturedAt)"",`n" +
-            "  ""favorites"": $($favorites | ConvertTo-Json -Compress -Depth 3),`n" +
-            "  ""recents"": $($recents | ConvertTo-Json -Compress -Depth 3)`n}`n"
+            "  ""favorites"": $favJson,`n" +
+            "  ""recents"": $recJson`n}`n"
+
+    # Validate IN MEMORY, before anything touches the seed on disk.
+    #
+    # This used to write first and check afterwards, which is the wrong order for the one
+    # file that cannot be regenerated from the repository: by the time the check failed,
+    # the malformed seed had already replaced the good one. The operator was then told to
+    # re-run with -SkipStoreBackup -- which ships whatever is lying on disk. A validator
+    # that runs after the write can only tell you the file you already shipped is broken.
+    try {
+        $check = $json | ConvertFrom-Json
+    } catch {
+        throw ("Refusing to write the restore seed: the composed JSON does not parse " +
+               "($($_.Exception.Message)). The seed on disk was left untouched.")
+    }
+
+    # Assert the TYPE, not merely the count. @(...).Count answers 1 for both ["A"] and
+    # "A", so the old count check was structurally blind to the unrolling bug above. On
+    # the device ChannelStore passes this value to SaveFavorites and calls .Count() on
+    # it, and an roString implements no ifArray -- a bare string would fault inside
+    # onPlaylistChange, on exactly the launch that needed recovery.
+    foreach ($name in @('favorites', 'recents')) {
+        $value = $check.$name
+        if ($value -isnot [System.Array]) {
+            $shape = if ($null -eq $value) { 'null' } else { $value.GetType().Name }
+            throw ("Refusing to write the restore seed: $name serialised as $shape, " +
+                   "expected a JSON array. The seed on disk was left untouched.")
+        }
+    }
+
+    if ($check.favorites.Count -ne $favorites.Count -or $check.recents.Count -ne $recents.Count) {
+        throw ("Refusing to write the restore seed: round-trip mismatch " +
+               "(favourites $($favorites.Count) -> $($check.favorites.Count), " +
+               "recents $($recents.Count) -> $($check.recents.Count)).")
+    }
 
     # No BOM: PowerShell 5.1's Out-File -Encoding utf8 writes one and a strict UTF-8
     # parser then rejects the file.
     [System.IO.File]::WriteAllText($SeedPath, $json,
         (New-Object System.Text.UTF8Encoding($false)))
 
-    # Read it back and prove it parses, rather than trusting the write.
-    $check = Get-Content -Raw -LiteralPath $SeedPath | ConvertFrom-Json
-    $n = @($check.favorites).Count
-    if ($n -ne $favorites.Count) {
-        throw "Restore seed readback mismatch: wrote $($favorites.Count) favourites, read $n."
-    }
-    Write-Host "  Restore seed refreshed: $n favourites, $($recents.Count) recents -> $SeedPath"
+    Write-Host ("  Restore seed refreshed: $($check.favorites.Count) favourites, " +
+                "$($check.recents.Count) recents -> $SeedPath")
     return $true
 }

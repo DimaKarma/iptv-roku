@@ -48,9 +48,28 @@ function Test-RokuPackage {
     }
 
     try {
-        $entries = @($archive.Entries | ForEach-Object { $_.FullName.Replace('\', '/') })
+        # Read the entry names VERBATIM. This used to be
+        # `$_.FullName.Replace('\', '/')`, which normalised Windows separators away
+        # before the checks below could see them -- so a package built with backslashes
+        # (what PowerShell's Compress-Archive and GNU tar produce) passed validation,
+        # and the Roku then answered "Install Failure: Script directory /source does not
+        # exist". A failed install is what cleared the device registry twice. The
+        # launderer WAS the defect: it erased exactly the thing the validator existed to
+        # catch, and it did so one line above the loop that would otherwise have caught it.
+        $entries = @($archive.Entries | ForEach-Object { $_.FullName })
         $requiredFiles = @('manifest', 'config.json')
         $requiredDirectories = @('source/', 'components/', 'images/')
+
+        # Diagnose the separator explicitly. The required-directory loop below already
+        # rejects such a package on its own (no entry starts with "source/"), but it
+        # would blame a missing directory that is in fact present under another name.
+        $backslashed = @($entries | Where-Object { $_.Contains('\') })
+        if ($backslashed.Count -gt 0) {
+            throw ("Roku package uses Windows path separators (entry '" +
+                   $backslashed[0] + "'); Roku answers " +
+                   '"Install Failure: Script directory /source does not exist". ' +
+                   "Build it with the Windows bsdtar at C:\Windows\System32\tar.exe.")
+        }
 
         foreach ($requiredFile in $requiredFiles) {
             if ($entries -notcontains $requiredFile) {
@@ -67,5 +86,85 @@ function Test-RokuPackage {
         $archive.Dispose()
     }
 
+    return $true
+}
+
+
+# Assert the registry-recovery seed is actually inside the package that is about to be
+# installed.
+#
+# source/restore.json is the ONLY thing that replays the owner's favourites after an
+# install clears the userdata registry section -- which has happened (see rule 28). It is
+# gitignored and reaches the package only because tar reads it off disk, so nothing in the
+# repository proves it shipped. Test-RokuPackage deliberately does NOT list it in
+# $requiredFiles: that would declare a clean clone of this public repo an invalid package
+# for lacking a personal file. This is the right shape instead -- a separate, explicitly
+# called check whose severity the caller chooses.
+#
+# -Required reflects whether the store gate actually ran. With -SkipStoreBackup the seed
+# may legitimately be stale or absent, and refusing the install would take away the
+# operator's last escape hatch at the exact moment they reached for it.
+function Test-RokuPackageSeed {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [switch]$Required
+    )
+
+    $seedEntry = 'source/restore.json'
+    $Path = (Resolve-Path -LiteralPath $Path).ProviderPath
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($Path)
+    try {
+        $entry = $archive.GetEntry($seedEntry)
+        if ($null -eq $entry) {
+            $message = ("Roku package has no restore seed: $seedEntry is not in the " +
+                        "package -- a registry wipe would be unrecoverable.")
+            if ($Required) { throw $message }
+            Write-Host "  WARNING: $message"
+            return $false
+        }
+
+        $stream = $entry.Open()
+        try {
+            $reader = New-Object System.IO.StreamReader($stream, [System.Text.Encoding]::UTF8)
+            try { $text = $reader.ReadToEnd() } finally { $reader.Dispose() }
+        } finally {
+            $stream.Dispose()
+        }
+    } finally {
+        $archive.Dispose()
+    }
+
+    try {
+        $seed = $text | ConvertFrom-Json
+    } catch {
+        # Deliberately do not echo $text: ConvertFrom-Json already quotes the offending
+        # document in its own message, and this file is the owner's personal channel list.
+        $message = "Packaged restore seed is not valid JSON: $($_.Exception.Message)"
+        if ($Required) { throw $message }
+        Write-Host "  WARNING: $message"
+        return $false
+    }
+
+    # Assert the TYPE, not just the count. PowerShell wraps a bare string into a
+    # one-element array, so @($seed.favorites).Count answers 1 for BOTH ["A"] and "A" --
+    # and the device-side reader calls .Count() on it, which an roString does not have.
+    if ($seed.favorites -isnot [System.Array]) {
+        $message = ("Packaged restore seed has a malformed favorites list: expected a " +
+                    "JSON array, got $($seed.favorites.GetType().Name).")
+        if ($Required) { throw $message }
+        Write-Host "  WARNING: $message"
+        return $false
+    }
+
+    if ($seed.favorites.Count -lt 1) {
+        $message = "Packaged restore seed carries no favourites."
+        if ($Required) { throw $message }
+        Write-Host "  WARNING: $message"
+        return $false
+    }
+
+    Write-Host ("  Packaged seed: $($seed.favorites.Count) favourites, captured " +
+                "$($seed.capturedAt)")
     return $true
 }

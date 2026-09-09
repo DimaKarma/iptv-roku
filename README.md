@@ -35,12 +35,16 @@ epg/                  EPG generator (Python) — see epg/README.md
 ## Requirements
 - A Roku device with **Developer Mode** enabled.
 - Windows with PowerShell for `deploy.ps1` (or any OS for the manual upload flow).
+- **Node.js**, for the BrightScript compile gate `deploy.ps1` runs before it builds
+  anything. Restore it with `npm ci` (the compiler version is pinned in `package.json`).
+- **Python**, for the node-reference check that resolves `findNode` / `observeField` /
+  `onChange` names the compiler cannot see.
 
 ## Configuration
 Copy `config.example.json` to `config.json` and fill in your URLs:
 ```json
 {
-  "playlistUrl": "http://HOST/path/TOKEN/playlist.m3u8",
+  "playlistUrl": "https://HOST/path/TOKEN/playlist.m3u8",
   "epgUrl": "https://raw.githubusercontent.com/DimaKarma/iptv-roku/epg-data/epg.json",
   "extraPlaylists": [
     { "url": "https://iptv-org.github.io/iptv/categories/sports.m3u", "category": "Sport2" }
@@ -50,15 +54,33 @@ Copy `config.example.json` to `config.json` and fill in your URLs:
 `config.json` holds a subscription token in `playlistUrl`, so it is **gitignored** and never
 committed. The playlist and EPG URLs can also be changed on the TV in Settings.
 
+**Prefer `https`.** The token is a path segment, so over plain `http` it — and the whole
+playlist, including every stream URL — crosses the network in the clear on every launch,
+readable by anyone on the path. The app fetches `https` over verified TLS with no change
+needed; whether your provider serves it is worth checking before settling for `http`.
+
 ## Install via the deploy script (Windows)
 1. Enable Developer Mode on the Roku TV: `Home x3, Up x2, Right, Left, Right, Left, Right`.
 2. Set a password and note the TV's IP address.
-3. Open `deploy.ps1` and fill in your `RokuIp` and `RokuPass` at the top.
-4. Run `deploy.ps1` in PowerShell. It builds the ZIP archive and uploads it to the TV.
+3. Pass the password to the script — **never put it in the file**:
+   ```powershell
+   $env:ROKU_PASS = "<your dev password>"
+   .\deploy.ps1 -RokuIp <TV_IP>
+   ```
+   (`-RokuPass <password>` works too.) The script has no default and refuses to run
+   without one, so the password stays out of the repository.
+4. It compile-checks the sources, backs up your favorites off the TV, builds the ZIP
+   archive and uploads it.
 
 ## Install manually
 1. Build a ZIP from the `manifest` and `config.json` files and the `source`, `components`,
    and `images` folders (`manifest` must sit at the archive root, not inside a folder).
+
+   > **The archive must be a real ZIP with forward slashes.** On Windows, GNU `tar` (the
+   > one in Git Bash) writes a *tar* file under a `.zip` name, and PowerShell's
+   > `Compress-Archive` writes backslash paths — Roku rejects both, and a rejected install
+   > can clear the channel's stored data. Use the bundled `C:\Windows\System32\tar.exe`,
+   > then check that the first two bytes are `PK` and that `unzip -t` passes.
 2. Open a browser on your PC and go to `http://<ROKU_IP>`.
 3. Enter the username `rokudev` and your Developer Mode password.
 4. Click **Upload**, select the ZIP, then click **Install**.
