@@ -18,7 +18,20 @@
                visible="true" />
                
         <!-- Spinner & Loading text -->
-        <BusySpinner id="spinner" translation="[960, 480]" visible="false" />
+        <!-- Same construction as the loading screen; see MainScene.xml for why this is
+             not a BusySpinner. Distinct node ids so a findNode from either component
+             cannot reach into the other. -->
+        <Group id="spinner" translation="[900, 424]" visible="false">
+            <Poster id="playSpinnerImg"
+                    uri="pkg:/images/spinner.png"
+                    width="120" height="120"
+                    scaleRotateCenter="[60, 60]" />
+            <Animation id="playSpinnerAnim" duration="1.1" repeat="true" easeFunction="linear">
+                <FloatFieldInterpolator key="[0.0, 1.0]"
+                                        keyValue="[0.0, 6.28318]"
+                                        fieldToInterp="playSpinnerImg.rotation" />
+            </Animation>
+        </Group>
         <Label id="loadingLabel"
                translation="[0, 560]"
                width="1920" horizAlign="center"

@@ -32,19 +32,19 @@ EXTRA_PLAYLIST = "https://iptv-org.github.io/iptv/categories/sports.m3u"
 def first_unquoted_comma(line):
     """Port of FirstUnquotedComma in source/M3uParser.brs (0-based, -1 if none)."""
     in_quote = False
-    pos = 0
+    scan_at = 0
     while True:
-        q = line.find('"', pos)
-        c = line.find(",", pos)
+        q = line.find('"', scan_at)
+        c = line.find(",", scan_at)
         if c < 0:
             return -1
         if q < 0 or c < q:
             if not in_quote:
                 return c
-            pos = c + 1
+            scan_at = c + 1
         else:
             in_quote = not in_quote
-            pos = q + 1
+            scan_at = q + 1
 
 
 def channel_name(line):

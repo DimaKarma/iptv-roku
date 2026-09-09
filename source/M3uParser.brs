@@ -111,21 +111,24 @@ end function
 ' both cases: it ends the attribute region, and everything after it -- commas included
 ' -- is the name.
 '
+' NB: the cursor is NOT named `pos`. Pos() is a BrightScript builtin, so `pos = 0`
+' fails to compile with "Builtin function call expected" (&h9d) -- an error no static
+' check here can see, and one only the device reports.
 ' Walks by index only (Instr with a start offset) and never slices with Left or Mid:
 ' on this device Left is byte-based while Mid is not, and mixing them splits Cyrillic.
 function FirstUnquotedComma(line as string) as integer
     inQuote = false
-    pos = 0
+    scanAt = 0
     while true
-        q = line.Instr(pos, chr(34))
-        c = line.Instr(pos, ",")
+        q = line.Instr(scanAt, chr(34))
+        c = line.Instr(scanAt, ",")
         if c < 0 then return -1
         if q < 0 or c < q
             if not inQuote then return c
-            pos = c + 1
+            scanAt = c + 1
         else
             inQuote = not inQuote
-            pos = q + 1
+            scanAt = q + 1
         end if
     end while
     return -1

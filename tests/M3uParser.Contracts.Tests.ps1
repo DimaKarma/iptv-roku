@@ -28,6 +28,6 @@ Describe 'M3U name-splitting contract' {
         $body | Should Not BeNullOrEmpty
         $body | Should Not Match '\.Left\('
         $body | Should Not Match '\.Mid\('
-        $body | Should Match '\.Instr\(pos, chr\(34\)\)'
+        $body | Should Match '\.Instr\(scanAt, chr\(34\)\)'   # NOT `pos`: reserved, see BrightScript.Lint.Tests.ps1
     }
 }

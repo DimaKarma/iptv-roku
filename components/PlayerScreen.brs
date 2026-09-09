@@ -2,6 +2,7 @@
 sub init()
     m.video = m.top.findNode("video")
     m.spinner = m.top.findNode("spinner")
+    m.spinnerAnim = m.top.findNode("playSpinnerAnim")
     m.loadingLabel = m.top.findNode("loadingLabel")
     
     m.overlayGroup = m.top.findNode("overlayGroup")
@@ -119,7 +120,7 @@ sub onVideoStateChange()
     state = m.video.state
     if state = "buffering"
         m.spinner.visible = true
-        m.spinner.control = "start"
+        m.spinnerAnim.control = "start"
         m.loadingLabel.visible = true
         if m.currentIndex >= 0 and m.top.playlist <> invalid
             m.loadingLabel.text = "Loading: " + m.top.playlist[m.currentIndex].name
@@ -128,11 +129,11 @@ sub onVideoStateChange()
         end if
     else if state = "playing"
         m.spinner.visible = false
-        m.spinner.control = "stop"
+        m.spinnerAnim.control = "stop"
         m.loadingLabel.visible = false
     else if state = "error"
         m.spinner.visible = false
-        m.spinner.control = "stop"
+        m.spinnerAnim.control = "stop"
         m.loadingLabel.visible = false
         showErrorDialog()
     end if

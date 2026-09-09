@@ -25,6 +25,13 @@ Desktop.ini
 .idea/
 *.swp
 
+# Personal registry seed: the owner's own favourites list, restored into the TV after
+# an install clears the registry. It ships in the build (tar takes source/ from disk)
+# but must never reach this public repo -- it is a personal viewing list, the same
+# reason channel names were stripped from the repo in TASK-15. A clone without it
+# degrades correctly: RestoreStoreIfEmpty finds no file and does nothing.
+source/restore.json
+
 # Local agent state and isolated working trees
 .agent-memory/
 .worktrees/
