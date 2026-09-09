@@ -1,9 +1,13 @@
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $packageTools = Join-Path $projectRoot 'tools\RokuPackage.ps1'
-$deployScript = Join-Path $projectRoot 'deploy.ps1'
+
+# Two assemblies, not one: ZipFile lives in System.IO.Compression.FileSystem, but
+# ZipArchiveMode lives in System.IO.Compression. Loading only the first leaves
+# [System.IO.Compression.ZipArchiveMode] unresolvable and every packaging test red.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+Add-Type -AssemblyName System.IO.Compression
 
 function New-TestRokuPackage([string] $path, [string[]] $entries) {
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [System.IO.Compression.ZipFile]::Open($path, [System.IO.Compression.ZipArchiveMode]::Create)
     try {
         foreach ($entryName in $entries) {
@@ -65,21 +69,16 @@ Describe 'Roku package validation' {
     }
 }
 
-Describe 'Roku deploy failure handling' {
-    BeforeEach {
-        Copy-Item (Join-Path $projectRoot 'config.example.json') (Join-Path $projectRoot 'config.json')
-    }
-
-    AfterEach {
-        Remove-Item (Join-Path $projectRoot 'config.json') -ErrorAction SilentlyContinue
-        Remove-Item (Join-Path $projectRoot 'build.zip') -ErrorAction SilentlyContinue
-    }
-
-    It 'fails without claiming success when the Roku upload cannot connect' {
-        $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $deployScript -RokuIp '127.0.0.1' -RokuPass 'test-password' 2>&1
-        $exitCode = $LASTEXITCODE
-
-        $exitCode | Should Be 1
-        ($output -join [Environment]::NewLine) | Should Not Match 'Deploy successful!'
-    }
-}
+# NOTE: a 'Roku deploy failure handling' suite used to live here. It was removed, not
+# ported, for two reasons:
+#
+#   1. It copied config.example.json over the project's real config.json and then
+#      deleted it in AfterEach. config.json is gitignored, holds the subscription
+#      token and exists in one copy with no backup -- one test run destroyed it.
+#   2. It asserted only "exit code 1 and no 'Deploy successful!'", which a script that
+#      fails to PARSE satisfies. It was green while deploy.ps1 was dead at parse time,
+#      so it could not tell a correct failure from a broken script.
+#
+# A replacement must run deploy.ps1 against a copy of the tree under $TestDrive (never
+# the working tree) and assert positive evidence: the output contains 'Deploy failed:'
+# and build.zip was produced and validated before the upload was attempted.
