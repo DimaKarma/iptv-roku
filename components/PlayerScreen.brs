@@ -26,6 +26,10 @@ sub init()
     m.clockTimer = m.top.findNode("clockTimer")
     m.okTimer = m.top.findNode("okTimer")
     
+    m.zapLine2 = m.top.findNode("zapLine2")
+    m.zapUntil = m.top.findNode("zapUntil")
+    m.zapProgress = m.top.findNode("zapProgress")
+
     m.zapperPanel = m.top.findNode("zapperPanel")
     m.zapperGrid = m.top.findNode("zapperGrid")
     m.zapperTimer = m.top.findNode("zapperTimer")
@@ -46,9 +50,14 @@ sub init()
     m.errorOptions.observeField("itemSelected", "onErrorOptionSelected")
     
     theme = getTheme()
+    ' Cached here, not fetched per zap: getTheme() builds an 11-key AA on every call
+    ' and showMiniBanner is on the channel-change hot path (GEMINI.md #17).
+    m.theme = theme
     if theme <> invalid
         m.overlayName.color = theme.colorText
-        m.overlayGroupLabel.color = theme.colorFocusBright
+        ' The category is a fact, not an accent. It was rendering in focusBright,
+        ' which made green mean four different things across the app.
+        m.overlayGroupLabel.color = theme.colorTextDim
         m.overlayTime.color = theme.colorText
         m.miniBannerLabel.color = theme.colorText
         m.errorDialog.color = theme.colorSurface
@@ -94,7 +103,7 @@ sub playIndex(idx as integer)
     
     m.errorDialog.visible = false
     
-    showMiniBanner(channel.name)
+    showMiniBanner(channel)
     updateOverlayData(channel)
     
     focusPlayer()
@@ -175,6 +184,9 @@ sub onErrorOptionSelected()
 end sub
 
 sub showOverlay()
+    ' The two panels overlap. Without this the banner draws on top of the overlay
+    ' whenever OK is pressed within the banner's few seconds.
+    hideMiniBanner()
     m.overlayGroup.visible = true
     updateClock()
     m.clockTimer.control = "start"
@@ -201,13 +213,66 @@ sub updateOverlayData(channel as object)
     m.overlayEpg.text = s
 end sub
 
-sub showMiniBanner(name as string)
-    m.miniBannerLabel.text = name
+' Row 1 is always the channel. Row 2 is the programme when the guide has one, and
+' the channel's category when it does not -- roughly two thirds of channels have no
+' guide at all, and the whole Sport2 category has none, so a "no programme
+' information" string would be the most-shown text in the app and would repeat for
+' hundreds of consecutive zaps. The category is always true, always non-empty
+' (M3uParser falls back to "Uncategorized") and tells the viewer where they are.
+' Which of the two it is reads from the colour, from the presence of the end time,
+' and from the progress foot -- three signals, no layout change either way.
+sub showMiniBanner(channel as object)
+    if channel = invalid then return
+
+    m.miniBannerLabel.text = channel.name
+
+    info = EpgFind(m.global.epg, channel.name, m.global.nowSec)
+    dur = 3.0
+    if info.now <> invalid
+        m.zapLine2.text = info.now.t
+        m.zapLine2.color = m.theme.colorText
+        m.zapUntil.text = "until " + EpgFmtHM(info.now.e)
+        setZapProgress(info.now)
+        dur = 4.5          ' more to read; every zap restarts the timer, so a burst
+                           ' only ever runs the LAST banner to completion
+    else
+        grp = ""
+        if channel.group <> invalid then grp = channel.group
+        m.zapLine2.text = grp
+        m.zapLine2.color = m.theme.colorTextDim
+        m.zapUntil.text = ""
+        m.zapProgress.visible = false
+    end if
+
     m.miniBanner.visible = true
+    ' Assigning duration to a RUNNING timer is unreliable: stop, set, start.
+    m.miniBannerTimer.control = "stop"
+    m.miniBannerTimer.duration = dur
     m.miniBannerTimer.control = "start"
 end sub
 
+' Computed once, at show time. The banner lives 3-4.5s, over which the bar would
+' move about 0.05% of its width -- observing nowSec to animate it would be pure cost
+' on the zap hot path.
+sub setZapProgress(prog as object)
+    span = prog.e - prog.s
+    if span <= 0
+        m.zapProgress.visible = false
+        return
+    end if
+    nowSec = m.global.nowSec
+    if nowSec = invalid or nowSec <= 0 then nowSec = CreateObject("roDateTime").AsSeconds()
+    frac = (nowSec - prog.s) / span
+    if frac < 0 then frac = 0
+    if frac > 1 then frac = 1
+    w = Int(1040 * frac)
+    if w < 8 then w = 8   ' a just-started programme must not read as "no data"
+    m.zapProgress.width = w
+    m.zapProgress.visible = true
+end sub
+
 sub hideMiniBanner()
+    m.miniBannerTimer.control = "stop"
     m.miniBanner.visible = false
 end sub
 

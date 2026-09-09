@@ -25,9 +25,13 @@
                color="0xECF2EEFF" visible="false" />
                
         <!-- Overlay (OK button) -->
+        <!-- Anchored to the bottom edge, but 224 tall instead of 180 and starting
+             56px higher, so the EPG row inside it ends 54px clear of the screen
+             edge instead of 10px. At [0,900] that row sat inside the overscan
+             zone - the one row carrying Now/Next was the likeliest to be cut off. -->
         <Rectangle id="overlayGroup"
-                   width="1920" height="180"
-                   translation="[0, 900]"
+                   width="1920" height="224"
+                   translation="[0, 856]"
                    color="0x000000CC"
                    visible="false">
             <Label id="overlayName"
@@ -49,17 +53,59 @@
                    color="0x8A968EFF" text="" />
         </Rectangle>
         
-        <!-- Mini-banner (Zap) -->
+        <!-- Mini-banner (Zap). Left-anchored on the app's x=96 spine: a centred
+             label moves its left edge on every zap, so the eye has to re-find the
+             start of the name while surfing.
+             Layout closes exactly: 24+44+4+36+20+4 = 132 vertically,
+             28+736+24+224+28 = 1040 horizontally.
+             Row 2 carries the programme title when there is one and the channel's
+             category when there is not - about two thirds of channels have no
+             guide at all, so the empty state has to look deliberate, not degraded. -->
         <Rectangle id="miniBanner"
-                   width="600" height="80"
-                   translation="[660, 950]"
-                   color="0x000000CC"
+                   width="1040" height="132"
+                   translation="[96, 856]"
+                   color="0x0E1310E6"
                    visible="false">
+            <!-- L-bracket, upright -->
+            <Rectangle id="zapSpine"
+                       width="4" height="132"
+                       translation="[0, 0]"
+                       color="0x4FB03AFF" />
+
             <Label id="miniBannerLabel"
-                   translation="[20, 0]"
-                   width="560" height="80"
-                   horizAlign="center" vertAlign="center"
+                   translation="[28, 24]"
+                   width="984" height="44"
+                   horizAlign="left" vertAlign="center"
+                   wrap="false"
                    color="0xECF2EEFF" />
+
+            <Label id="zapLine2"
+                   translation="[28, 72]"
+                   width="736" height="36"
+                   horizAlign="left" vertAlign="center"
+                   wrap="false"
+                   color="0xECF2EEFF" />
+
+            <!-- Right-aligned, so the scale pivot is its RIGHT edge (224), not its
+                 centre - pivoting at the centre would drift the shrunken text away
+                 from the panel margin. -->
+            <Label id="zapUntil"
+                   translation="[788, 72]"
+                   width="224" height="36"
+                   horizAlign="right" vertAlign="center"
+                   wrap="false"
+                   scale="[0.8, 0.8]"
+                   scaleRotateCenter="[224, 18]"
+                   color="0x8A968EFF" />
+
+            <!-- L-bracket, foot: elapsed fraction of the current programme. Flush
+                 with the panel edge and with no track behind it, so when there is no
+                 programme it leaves no hole - just a panel edge. -->
+            <Rectangle id="zapProgress"
+                       width="0" height="4"
+                       translation="[0, 128]"
+                       color="0x4FB03AFF"
+                       visible="false" />
         </Rectangle>
         
         <!-- Error Dialog -->
@@ -87,8 +133,11 @@
         </Rectangle>
         
         <!-- Toast for favorites -->
+        <!-- y 784..844: below the error dialog (ends 775, and the two do coexist -
+             the dialog's favourite option raises a toast) and above the zap banner
+             (starts 856). At the old y=800 it overlapped the banner by 4px. -->
         <Rectangle id="toastBg"
-                   translation="[460, 800]"
+                   translation="[460, 784]"
                    width="1000" height="60"
                    color="0x18211CCC"
                    visible="false">
