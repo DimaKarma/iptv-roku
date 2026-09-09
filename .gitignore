@@ -28,3 +28,6 @@ Desktop.ini
 # Local agent state and isolated working trees
 .agent-memory/
 .worktrees/
+
+# Favorites/recents captured from the TV before each sideload (contains channel names)
+backups/

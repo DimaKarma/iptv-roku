@@ -149,6 +149,9 @@ sub onPlaylistChange()
     
     MigrateStoreToNames(res.channels)
     PurgeAdultFromRecents(res.channels)
+    ' After migration and purge, so what is printed is exactly what is stored.
+    ' deploy.ps1 captures these lines over port 8085 before every sideload.
+    DumpStore()
     
     buildCategories()
     clearGridCache()
