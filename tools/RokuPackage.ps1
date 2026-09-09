@@ -17,6 +17,13 @@ function Test-RokuPackage {
         throw "Roku package was not created: $Path"
     }
 
+    # Resolve to an absolute path before handing it to .NET. Set-Location changes
+    # PowerShell's location but NOT the process working directory, so Test-Path above
+    # (PowerShell) and [System.IO.File]::OpenRead below (.NET) resolve a relative path
+    # against DIFFERENT directories -- the check passes and the open then fails with
+    # "could not find file" pointing at a directory the caller never mentioned.
+    $Path = (Resolve-Path -LiteralPath $Path).ProviderPath
+
     $stream = [System.IO.File]::OpenRead($Path)
     try {
         if ($stream.Length -lt 4) {

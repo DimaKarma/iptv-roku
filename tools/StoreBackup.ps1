@@ -81,13 +81,21 @@ function Save-RokuStore {
 
         $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
         $path = Join-Path $OutDir "store-$stamp.json"
-        $payload = [ordered]@{
-            capturedAt = (Get-Date).ToString('s')
-            rokuIp     = $host_
-            favorites  = $favObj
-            recents    = $recObj
-        }
-        $payload | ConvertTo-Json -Depth 5 | Out-File -FilePath $path -Encoding utf8
+
+        # Compose the JSON from the device's own strings rather than round-tripping
+        # through ConvertTo-Json. Two PS 5.1 traps, both seen on the first real run:
+        #   * ConvertTo-Json wraps a nested array as {"value":[...],"Count":31}, so the
+        #     backup could not be read back as a plain list;
+        #   * Out-File -Encoding utf8 writes a BOM, and a strict UTF-8 parser rejects
+        #     the file outright.
+        # $favorites/$recents are already valid JSON (proved by the ConvertFrom-Json
+        # above), so emitting them verbatim is both simpler and lossless.
+        $json = "{`n  ""capturedAt"": ""$((Get-Date).ToString('s'))"",`n" +
+                "  ""rokuIp"": ""$host_"",`n" +
+                "  ""favorites"": $favorites,`n" +
+                "  ""recents"": $recents`n}`n"
+        [System.IO.File]::WriteAllText($path, $json,
+            (New-Object System.Text.UTF8Encoding($false)))
 
         Write-Host "  Store backed up: $favCount favorites, $recCount recents -> $path"
         return $path
