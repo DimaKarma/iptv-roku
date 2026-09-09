@@ -103,6 +103,12 @@ sub playIndex(idx as integer)
     
     m.errorDialog.visible = false
     
+    ' Set the loading caption HERE, not only from onVideoStateChange. That observer
+    ' fires on a state CHANGE, and a zap while the video is already "buffering" does
+    ' not change the state -- so the caption kept naming the previous channel during a
+    ' fast surf. Same class as the Settings action field that only fired once.
+    m.loadingLabel.text = "Loading: " + channel.name
+
     showMiniBanner(channel)
     updateOverlayData(channel)
     
