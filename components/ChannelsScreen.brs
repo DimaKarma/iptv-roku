@@ -147,6 +147,9 @@ sub onPlaylistChange()
     res = m.top.playlistResult
     if res = invalid return
     
+    ' Before migration and the purge, so everything downstream sees the restored
+    ' data on the run that seeds it.
+    RestoreStoreIfEmpty()
     MigrateStoreToNames(res.channels)
     PurgeAdultFromRecents(res.channels)
     ' After migration and purge, so what is printed is exactly what is stored.

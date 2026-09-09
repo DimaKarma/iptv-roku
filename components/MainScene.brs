@@ -2,6 +2,7 @@
 sub init()
     m.background = m.top.findNode("background")
     m.spinner = m.top.findNode("spinner")
+    m.spinnerAnim = m.top.findNode("loadSpinnerAnim")
     m.statusLabel = m.top.findNode("statusLabel")
     m.errorLabel = m.top.findNode("errorLabel")
     m.errorHintLabel = m.top.findNode("errorHintLabel")
@@ -144,7 +145,7 @@ end sub
 
 sub hideAllScreens()
     m.spinner.visible = false
-    m.spinner.control = "stop"
+    m.spinnerAnim.control = "stop"
     m.statusLabel.visible = false
     m.errorLabel.visible = false
     m.errorHintLabel.visible = false
@@ -161,7 +162,7 @@ sub showLoading(text as string)
     hideAllScreens()
     m.brandGroup.visible = true
     m.spinner.visible = true
-    m.spinner.control = "start"
+    m.spinnerAnim.control = "start"
     m.statusLabel.visible = true
     m.statusLabel.text = text
 end sub

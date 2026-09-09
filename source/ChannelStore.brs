@@ -109,12 +109,49 @@ function PushRecent(name as string) as void
     SaveRecents(recents)
 end function
 
+' One-shot restore from a seed shipped inside the package.
+'
+' A dev install can clear the whole `userdata` registry section. It happened in July
+' with a corrupt zip, and again on 2026-09-09 after an install that failed to compile
+' -- both times the favourites were gone. The registry is the only durable store on
+' the device (a reinstall wipes cachefs), so the recovery path has to come in with the
+' package itself.
+'
+' Seeds a key ONLY when that key is currently empty. That makes the file inert on every
+' start after the first: it can never overwrite a list the user has built up, and it
+' needs no flag, no version counter and no cleanup.
+sub RestoreStoreIfEmpty()
+    raw = ReadAsciiFile("pkg:/source/restore.json")
+    if raw = "" then return          ' no seed shipped; ReadAsciiFile logs, returns ""
+    seed = ParseJson(raw)
+    if seed = invalid then return
+
+    if seed.favorites <> invalid
+        cur = LoadFavorites()
+        if cur = invalid or cur.Count() = 0
+            SaveFavorites(seed.favorites)
+            print "[STORE] restored favorites=" + seed.favorites.Count().ToStr()
+        end if
+    end if
+
+    if seed.recents <> invalid
+        cur = LoadRecents()
+        if cur = invalid or cur.Count() = 0
+            SaveRecents(seed.recents)
+            print "[STORE] restored recents=" + seed.recents.Count().ToStr()
+        end if
+    end if
+end sub
+
 ' Print favorites and recents to the debug console (port 8085) so they can be captured
-' OFF the device before a sideload. The registry survives a normal reinstall, but a
-' CORRUPT package does not -- a bad zip once made the TV answer "Unzip failed...
-' Unloading" and the whole userdata section was gone, with no copy anywhere. cachefs is
-' no help: a reinstall wipes it too. The console is the only channel out of the box, so
-' deploy.ps1 captures these two lines before it installs anything.
+' OFF the device before a sideload.
+'
+' Do NOT assume the registry survives an install. It was measured surviving one in
+' TASK-21/TASK-24, but on 2026-09-09 an install wiped the whole `userdata` section --
+' 31 favourites to zero -- most likely because the install before it had failed to
+' compile and unloaded the channel. A corrupt zip did the same in July. cachefs is no
+' help either: a reinstall wipes it. The console is the only way this data leaves the
+' box, so deploy.ps1 captures these two lines before it installs anything.
 ' Format is deliberately one key per line with a fixed prefix, so a capture script can
 ' find them without parsing the surrounding log.
 sub DumpStore()

@@ -7,7 +7,23 @@
         <Timer id="nowTimer" duration="30" repeat="true" />
         <Rectangle id="background" width="1920" height="1080" color="0x0E1310FF">
             <!-- Loading state -->
-            <BusySpinner id="spinner" translation="[960, 480]" visible="true" />
+            <!-- Not a BusySpinner. A bare one draws nothing (it renders a `poster` it
+                 does not have), and attaching one via role="poster" changed nothing on
+                 this device and logged nothing either. Built from primitives instead,
+                 so a failure is diagnosable: if the ring appears but does not turn, the
+                 Animation is wrong; if nothing appears, the image path is.
+                 rotation is in RADIANS, and pivots on scaleRotateCenter = the centre. -->
+            <Group id="spinner" translation="[900, 424]" visible="true">
+                <Poster id="loadSpinnerImg"
+                        uri="pkg:/images/spinner.png"
+                        width="120" height="120"
+                        scaleRotateCenter="[60, 60]" />
+                <Animation id="loadSpinnerAnim" duration="1.1" repeat="true" easeFunction="linear">
+                    <FloatFieldInterpolator key="[0.0, 1.0]"
+                                            keyValue="[0.0, 6.28318]"
+                                            fieldToInterp="loadSpinnerImg.rotation" />
+                </Animation>
+            </Group>
             <Label id="statusLabel"
                    text="Loading…"
                    color="0x8A968EFF"
@@ -40,8 +56,10 @@
                        width="1920"
                        horizAlign="center" />
                 <Rectangle translation="[890, 405]" width="140" height="4" color="0x4FB03AFF" />
+                <!-- y=952, not 1000: at 1000 the ink ended 56px from the bottom
+                     edge, inside the ~90px overscan zone. -->
                 <Label text="(c) 2026 DimaKarma"
-                       translation="[0, 1000]"
+                       translation="[0, 952]"
                        color="0x8A968EFF"
                        width="1920"
                        horizAlign="center"
