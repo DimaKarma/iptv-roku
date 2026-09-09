@@ -211,11 +211,16 @@ sub onErrorOptionSelected()
                     showToast("Removed from favorites")
                 end if
                 ' Rebuild: the row just removed itself, so the menu comes back a row
-                ' shorter. Send the cursor to the top, or the highlight stays on index 2 --
-                ' which is now "Back" -- and lands on a different action than the one the
-                ' user was looking at.
+                ' shorter and the cursor stays where it was -- on what is now "Back".
+                '
+                ' Do NOT add `jumpToItem = 0` here to tidy that up. Measured on the device:
+                ' setting jumpToItem immediately after swapping `content` leaves the list
+                ' with a rendered highlight that no longer tracks its own focus index, and
+                ' Up/Down stop moving it entirely. The dialog is still escapable, because
+                ' onKeyEvent handles the Back BUTTON directly, but every other option
+                ' becomes unreachable. Landing on a neighbouring row is a cosmetic
+                ' surprise; a menu whose arrows are dead is a broken screen.
                 m.errorOptions.content = buildErrorOptions()
-                m.errorOptions.jumpToItem = 0
                 m.errorOptions.setFocus(true)
             end if
         end if
