@@ -38,6 +38,16 @@ HTTP_TIMEOUT = 180
 # defensively (defusedxml + a decompressed-size cap), so plain HTTP is accepted here.
 MAX_DECOMPRESSED = 2 * 1024 * 1024 * 1024   # 2 GiB cap — guards against a gzip bomb
 
+# Refuse to publish a degenerate guide. If the upstream feed changes shape, or
+# channels.txt drifts away from the XMLTV display-names, matching collapses and this
+# script would otherwise write {"count":0,"epg":{}}, exit 0, and let the Action publish
+# it over the last good file. A ratio rather than an absolute floor: channels.txt has
+# already changed size once (1052 -> 844 in TASK-15) and an absolute number silently
+# becomes wrong when it does. Observed healthy rate is ~508/844 (~60%), so 40% leaves
+# room for normal upstream churn while still catching a matcher collapse.
+# Override with EPG_MIN_CHANNELS=<n> to test the guard or to handle a smaller list.
+MIN_MATCH_RATIO = 0.40
+
 
 class _LimitedReader:
     """Wrap a stream and abort if it yields more than `limit` bytes (decompression-bomb guard)."""
@@ -146,6 +156,21 @@ def main():
 
     for nm in epg:
         epg[nm].sort(key=lambda p: p["s"])
+
+    # Check BEFORE writing, so a rejected run leaves no partial epg.json on disk for
+    # the publish step to pick up. A non-zero exit aborts the workflow job before its
+    # publish step, so the last good file on the epg-data branch survives untouched.
+    override = os.environ.get("EPG_MIN_CHANNELS")
+    floor = int(override) if override else int(MIN_MATCH_RATIO * len(names))
+    if len(epg) < floor:
+        sys.stderr.write(
+            "REFUSING to write epg.json: matched %d channels, need at least %d "
+            "(%d names in channels.txt, %d programmes in window).\n"
+            % (len(epg), floor, len(names), n_prog))
+        sys.stderr.write(
+            "This usually means the upstream feed changed or channels.txt drifted. "
+            "The previously published epg.json is left in place.\n")
+        sys.exit(1)
 
     out = {"generated": now, "count": len(epg), "epg": epg}
     with open(out_path, "w", encoding="utf-8") as f:
