@@ -69,7 +69,8 @@ class _LimitedReader:
 
 _QUALITY_RE = re.compile(r'\b(fhd|uhd|hd|sd|4k)\b')
 _SHIFT_RE = re.compile(r'\+\d+')
-# Keep digits, Latin and Cyrillic (RU + UA і ї є ґ) letters — functional matching literal.
+# Keep digits, Latin and Cyrillic letters, including the four Ukrainian ones. The class
+# below is a FUNCTIONAL matching literal, not prose -- it must stay in Cyrillic.
 _KEEP_RE = re.compile(r'[^0-9a-zа-яёіїєґ]')
 
 
@@ -88,7 +89,7 @@ def norm(s):
 # drawn as an empty box. The upstream feed prefixes live broadcasts with U+22D7 "greater
 # than with dot" and sprinkles U+25B6, emoji variation selectors and the odd Hangul
 # syllable through titles, all of which reach the TV as boxes -- visible on Eurosport 1
-# HD as a leading square before "Велоспорт".
+# HD as an empty box in front of the programme title.
 #
 # A whitelist, not a blacklist: keep only what is known to render (Latin, Cyrillic,
 # digits, ASCII punctuation, and the handful of typographic characters confirmed on a
@@ -98,7 +99,7 @@ _RENDERABLE_EXTRA = set(
     "—"   # em dash        - confirmed rendering in "CHANNELS - Favorites"
     "–"   # en dash
     "…"   # ellipsis       - confirmed in truncated card titles
-    "«»"  # guillemets - confirmed in "«Хокум»"
+    "«»"  # guillemets - confirmed rendering in a card title on the device
     "★"   # star           - confirmed in the rail
     "°"   # degree
     "ёЁ"                    # yo
