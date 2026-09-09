@@ -15,6 +15,7 @@ sub init()
     m.categoryList.observeField("itemSelected", "onCategorySelected")
     m.toastTimer.observeField("fire", "hideToast")
     m.top.observeField("restoreFocus", "onRestoreFocus")
+    m.top.observeField("noticeCommand", "onNotice")
     
     theme = getTheme()
     if theme <> invalid
@@ -366,6 +367,10 @@ function onKeyEvent(key as string, press as boolean) as boolean
     end if
     return handled
 end function
+
+sub onNotice()
+    showToast(m.top.notice)
+end sub
 
 sub showToast(msg as string)
     m.toastLabel.text = msg

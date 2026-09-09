@@ -26,8 +26,19 @@ sub init()
     m.searchScreen.observeField("playRequest", "onPlayRequest")
     
     m.settingsScreen.observeField("exitRequested", "onChildScreenExit")
-    m.settingsScreen.observeField("action", "onSettingsAction")
-    
+    ' Observe the TRIGGER, not the payload: repeating the same action leaves the
+    ' string unchanged and a field observer only fires on change. Exactly one
+    ' observer here -- watching both fields would handle every action twice.
+    m.settingsScreen.observeField("actionCommand", "onSettingsAction")
+
+    ' EPG state. epgFailed drives the About text; epgNoticeShown limits the toast to
+    ' once per session (epgRefreshTimer retries hourly, forever); epgUserInitiated
+    ' forces a toast for the one load the user explicitly asked for.
+    m.epgFailed = false
+    m.epgNoticeShown = false
+    m.epgUserInitiated = false
+    m.epgGeneratedText = ""
+
     m.onboardingOk.observeField("buttonSelected", "onOnboardingSave")
     
     m.epgRefreshTimer = m.top.findNode("epgRefreshTimer")
@@ -231,7 +242,9 @@ sub onOpenSettings()
     end if
     if m.currentEpgUrl <> invalid then info.epgUrl = m.currentEpgUrl
     if m.epgCount <> invalid then info.epgCount = m.epgCount
-    
+    info.epgFailed = m.epgFailed
+    info.epgGeneratedText = m.epgGeneratedText
+
     m.settingsScreen.info = info
     hideAllScreens()
     m.settingsScreen.visible = true
@@ -252,6 +265,9 @@ sub onSettingsAction()
     else if action = "urlChanged"
         startPlaylistLoad(m.settingsScreen.newUrl, false)
     else if action = "epgChanged"
+        ' The user just asked for this load, so report its outcome even if a toast
+        ' has already been shown this session.
+        m.epgUserInitiated = true
         startEpgLoad(m.settingsScreen.newUrl)
     end if
 end sub
@@ -275,11 +291,48 @@ sub onEpgStatus()
             if m.global.epgReady = invalid then m.global.addField("epgReady", "boolean", false)
             m.global.epg = res.epg
             m.global.epgReady = not m.global.epgReady
-            
+
             m.epgCount = res.count
             m.epgGenerated = res.generated
+            ' Format once here, not in SettingsScreen.updateInfo -- that runs on every
+            ' rail focus move, and roDateTime per focus event is the allocation
+            ' pattern GEMINI.md #17 exists to prevent.
+            m.epgGeneratedText = fmtEpochLocal(res.generated)
+            m.epgFailed = false
+        end if
+    else if status = "error"
+        ' EPG is an enhancement, not a requirement: channels must keep playing. So no
+        ' showError() here -- that hides the grid. A log line, a durable record in
+        ' About, and at most one toast.
+        reason = m.epgTask.error
+        if reason = invalid or reason = "" then reason = "unknown"
+        print "MainScene: EPG unavailable (" + reason + ")"
+
+        m.epgFailed = true
+        m.epgCount = invalid
+
+        if m.epgUserInitiated or not m.epgNoticeShown
+            showNotice("Guide unavailable")
+            m.epgNoticeShown = true
         end if
     end if
+    ' Consumed either way: it marks one specific load, not a standing mode.
+    m.epgUserInitiated = false
+end sub
+
+' Best-effort toast on whichever screen is in front. MainScene owns no toast of its
+' own (each screen has a private one), so it routes via notice + noticeCommand.
+' PlayerScreen is deliberately excluded: never interrupt playback for a guide message.
+sub showNotice(msg as string)
+    target = invalid
+    if m.settingsScreen.visible
+        target = m.settingsScreen
+    else if m.channelsScreen.visible
+        target = m.channelsScreen
+    end if
+    if target = invalid then return
+    target.notice = msg
+    target.noticeCommand = not target.noticeCommand
 end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean

@@ -9,6 +9,9 @@
         <field id="restoreFocus" type="boolean" />
         <field id="openSearch" type="boolean" />
         <field id="openSettings" type="boolean" />
+        <!-- notice carries the text, noticeCommand triggers it (repeat-safe). -->
+        <field id="notice" type="string" />
+        <field id="noticeCommand" type="boolean" />
     </interface>
     
     <children>
