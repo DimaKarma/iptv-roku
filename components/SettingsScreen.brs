@@ -26,7 +26,7 @@ sub init()
     if theme <> invalid
         m.headerLabel.color = theme.colorText
         m.settingsList.color = theme.colorTextDim
-        m.settingsList.focusedColor = theme.colorText
+        m.settingsList.focusedColor = theme.colorOnAccent
         m.infoLabel.color = theme.colorTextDim
         m.keyboardHint.color = theme.colorText
         m.toastBg.color = theme.colorSurface

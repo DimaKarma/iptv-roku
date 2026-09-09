@@ -146,11 +146,17 @@
                    horizAlign="center" wrap="true"
                    color="0x8A968EFF" />
                    
+            <!-- Same treatment as the category rail: the stock focus chip is #D3D3D3 and
+                 anything readable is unreadable on it. Measured on the device before this
+                 change, the selected option's text was #D8D8D8 on a #D3D3D3 chip - the
+                 label all but vanished at the one moment the user needs to act. The blend
+                 multiplies the stock bitmap to the brand green; the text is on-accent. -->
             <LabelList id="errorOptions"
                        translation="[200, 220]"
                        itemSize="[400, 50]"
                        color="0x8A968EFF"
-                       focusedColor="0x74D45BFF" />
+                       focusedColor="0x08130AFF"
+                       focusBitmapBlendColor="0x5FD345FF" />
         </Rectangle>
         
         <!-- Toast for favorites -->

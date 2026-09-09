@@ -65,7 +65,7 @@ sub init()
         m.toastBg.color = theme.colorSurface
         m.toastLabel.color = theme.colorText
         m.errorOptions.color = theme.colorTextDim
-        m.errorOptions.focusedColor = theme.colorText
+        m.errorOptions.focusedColor = theme.colorOnAccent
     end if
     
     m.currentIndex = -1

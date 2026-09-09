@@ -24,12 +24,15 @@
                width="1700"
                height="40" />
 
+        <!-- The third and last list on the stock grey chip. Fixing only the two the owner
+             happened to look at would have left the same 1.29:1 defect one screen away. -->
         <LabelList id="settingsList"
                    translation="[96, 120]"
                    itemSize="[800, 70]"
                    itemSpacing="[0, 10]"
                    color="0x8A968EFF"
-                   focusedColor="0x74D45BFF"
+                   focusedColor="0x08130AFF"
+                   focusBitmapBlendColor="0x5FD345FF"
                    numRows="5" />
                    
         <Label id="infoLabel"
