@@ -34,7 +34,7 @@ function ParseM3U(text as string) as object
             else if line.StartsWith("#EXTINF:")
                 currentChannel = {}
                 ' parse EXTINF
-                commaPos = line.Instr(",")
+                commaPos = FirstUnquotedComma(line)
                 if commaPos >= 0
                     currentChannel.name = line.Mid(commaPos + 1).Trim()
                     attrsStr = line.Mid(8, commaPos - 8)
@@ -94,6 +94,41 @@ function ParseM3U(text as string) as object
     end for
     
     return result
+end function
+
+' Index (Instr convention) of the first comma that is NOT inside a quoted attribute
+' value, or -1.
+'
+' #EXTINF attributes are key="value" pairs and the channel name is everything after
+' the comma that ends them. Splitting on the FIRST comma broke every line whose
+' attributes contain one: the Sport2 playlist sets
+'   http-user-agent="Mozilla/5.0 (...) AppleWebKit/537.36 (KHTML, like Gecko) ..."
+' and the comma in "(KHTML, like Gecko)" was taken as the separator, so 98 of its 467
+' channels were named after a fragment of a browser user-agent string.
+'
+' Splitting on the LAST unquoted comma would fix those but break any name that
+' legitimately contains a comma ("Sport, Live"). The first UNQUOTED comma is right in
+' both cases: it ends the attribute region, and everything after it -- commas included
+' -- is the name.
+'
+' Walks by index only (Instr with a start offset) and never slices with Left or Mid:
+' on this device Left is byte-based while Mid is not, and mixing them splits Cyrillic.
+function FirstUnquotedComma(line as string) as integer
+    inQuote = false
+    pos = 0
+    while true
+        q = line.Instr(pos, chr(34))
+        c = line.Instr(pos, ",")
+        if c < 0 then return -1
+        if q < 0 or c < q
+            if not inQuote then return c
+            pos = c + 1
+        else
+            inQuote = not inQuote
+            pos = q + 1
+        end if
+    end while
+    return -1
 end function
 
 function extractAttribute(text as string, attrName as string) as string
