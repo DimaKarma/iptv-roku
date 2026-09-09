@@ -103,3 +103,50 @@ function Save-RokuStore {
         $client.Close()
     }
 }
+
+
+# Rewrite the in-package restore seed from a freshly captured store.
+#
+# The seed is what ChannelStore.RestoreStoreIfEmpty() replays after an install clears the
+# registry. It only helps if it is CURRENT, and it used to be refreshed by hand -- which
+# in a project whose own rule is "a mechanism, not a note" was the wrong half of the
+# safety net. deploy.ps1 now calls this between capturing the store and building the
+# package, so what ships is always the list that was on the TV moments earlier.
+function Update-RestoreSeed {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$StorePath,
+        [Parameter(Mandatory = $true)][string]$SeedPath
+    )
+
+    $store = Get-Content -Raw -LiteralPath $StorePath | ConvertFrom-Json
+    $favorites = @($store.favorites)
+    # Drop recents whose names are fragments of an http-user-agent attribute: they came
+    # from the pre-fix M3U parser and can never match a channel again.
+    $recents = @($store.recents | Where-Object { $_ -notmatch '"' })
+
+    if ($favorites.Count -eq 0) {
+        Write-Host "  Seed NOT updated: the captured store has no favourites."
+        return $false
+    }
+
+    $json = "{`n" +
+            "  ""note"": ""One-shot seed. ChannelStore.RestoreStoreIfEmpty writes a list back only when that registry key is empty, so this file is inert once the store is populated."",`n" +
+            "  ""capturedAt"": ""$($store.capturedAt)"",`n" +
+            "  ""favorites"": $($favorites | ConvertTo-Json -Compress -Depth 3),`n" +
+            "  ""recents"": $($recents | ConvertTo-Json -Compress -Depth 3)`n}`n"
+
+    # No BOM: PowerShell 5.1's Out-File -Encoding utf8 writes one and a strict UTF-8
+    # parser then rejects the file.
+    [System.IO.File]::WriteAllText($SeedPath, $json,
+        (New-Object System.Text.UTF8Encoding($false)))
+
+    # Read it back and prove it parses, rather than trusting the write.
+    $check = Get-Content -Raw -LiteralPath $SeedPath | ConvertFrom-Json
+    $n = @($check.favorites).Count
+    if ($n -ne $favorites.Count) {
+        throw "Restore seed readback mismatch: wrote $($favorites.Count) favourites, read $n."
+    }
+    Write-Host "  Restore seed refreshed: $n favourites, $($recents.Count) recents -> $SeedPath"
+    return $true
+}

@@ -1,0 +1,12 @@
+{
+  "name": "iptv-roku-devtools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Dev-only tooling. Nothing here ships to the TV: the build contains manifest, config.json, source, components and images only.",
+  "scripts": {
+    "check": "bsc --project bsconfig.json"
+  },
+  "devDependencies": {
+    "brighterscript": "0.73.3"
+  }
+}
