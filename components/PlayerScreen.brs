@@ -139,10 +139,25 @@ sub onVideoStateChange()
     end if
 end sub
 
+' Labels and actions are written in ONE pass into two parallel lists, so the menu's length
+' and its behaviour cannot drift apart. This menu is now variable-length, and the dispatch
+' below reads m.errorActions rather than a fixed index -- with hardcoded indices, dropping
+' one row would silently move "Back" from 3 to 2, so Back would do nothing and index 2
+' would toggle favourites on a channel that has none.
 function buildErrorOptions() as object
     c = CreateObject("roSGNode", "ContentNode")
+    m.errorActions = []
+
     addErrorOption(c, "Retry")
+    m.errorActions.Push("retry")
+
     addErrorOption(c, "Next channel")
+    m.errorActions.Push("next")
+
+    ' Offered ONLY when the channel already is a favourite. This dialog is open because the
+    ' stream would not play, so inviting the user to bookmark it made no sense. The REMOVE
+    ' case is the reason the option exists at all (TASK-18 Part B): a dead favourite cannot
+    ' be removed from the grid, because this dialog holds the focus.
     isFav = false
     if m.currentIndex >= 0 and m.top.playlist <> invalid
         ch = m.top.playlist[m.currentIndex]
@@ -150,10 +165,12 @@ function buildErrorOptions() as object
     end if
     if isFav
         addErrorOption(c, "Remove from favorites")
-    else
-        addErrorOption(c, "Add to favorites")
+        m.errorActions.Push("fav")
     end if
+
     addErrorOption(c, "Back")
+    m.errorActions.Push("back")
+
     return c
 end function
 
@@ -166,26 +183,43 @@ end sub
 
 sub onErrorOptionSelected()
     idx = m.errorOptions.itemSelected
-    if idx = 0 ' Retry
+    ' Bound-check rather than trust. itemSelected is a plain integer and can outlive the
+    ' menu it indexed: the favourite row removes itself, so the content is rebuilt one row
+    ' shorter while the cursor still holds the old position.
+    if m.errorActions = invalid or idx < 0 or idx >= m.errorActions.Count() then return
+    action = m.errorActions[idx]
+
+    if action = "retry"
         if m.currentIndex >= 0 then playIndex(m.currentIndex)
-    else if idx = 1 ' Next channel
+    else if action = "next"
         zapDown()
-    else if idx = 2 ' Toggle favorite
+    else if action = "fav"
         if m.currentIndex >= 0 and m.top.playlist <> invalid
             ch = m.top.playlist[m.currentIndex]
             if ch <> invalid
+                ' The row is only built for a channel that IS a favourite, and nothing can
+                ' change that while this dialog holds focus -- onKeyEvent's errorDialog
+                ' branch passes only back/OK/up/down, so the "*" toggle cannot reach the
+                ' player here. So this is always a removal today. The toast still reports
+                ' what ToggleFavorite actually DID rather than what that reasoning predicts,
+                ' because the reasoning is about the current key handling and the toast
+                ' should not start lying if that changes.
                 isFav = ToggleFavorite(ch.name)
                 if isFav
                     showToast("Added to favorites")
                 else
                     showToast("Removed from favorites")
                 end if
-                ' rebuild the menu (option label changed), keep the dialog open
+                ' Rebuild: the row just removed itself, so the menu comes back a row
+                ' shorter. Send the cursor to the top, or the highlight stays on index 2 --
+                ' which is now "Back" -- and lands on a different action than the one the
+                ' user was looking at.
                 m.errorOptions.content = buildErrorOptions()
+                m.errorOptions.jumpToItem = 0
                 m.errorOptions.setFocus(true)
             end if
         end if
-    else if idx = 3 ' Back
+    else if action = "back"
         exitPlayer()
     end if
 end sub
