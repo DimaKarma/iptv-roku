@@ -10,19 +10,13 @@ sub init()
     m.favStar = m.top.findNode("favStar")
     m.nameLabel = m.top.findNode("nameLabel")
     m.epgLabel = m.top.findNode("epgLabel")
-    m.focusBorder = m.top.findNode("focusBorder")
-    
+
     m.theme = m.global.theme
     if m.theme = invalid then m.theme = getTheme()   ' fallback for early init
     theme = m.theme
     if theme <> invalid
         m.background.color = theme.colorSurface
         m.nameLabel.color = theme.colorText
-        
-        ' Update border colors
-        for i = 0 to 3
-            m.focusBorder.getChild(i).color = theme.colorFocus
-        end for
     end if
     
     ' Fix anchor for scaling (center of 330x220)
@@ -91,11 +85,20 @@ sub updateEpgLabel()
     end if
 end sub
 
+' The focus ring is drawn by the GRID, not by this card.
+'
+' This used to keep four green rectangles at [-4,-4] and toggle them here. They were
+' never visible when it mattered: the grid clips item children to the GRID's viewport, so
+' the two at negative offsets were cut away entirely, and when the grid actually held
+' focus the stock focus bitmap was painted over the two that survived. Fixing the
+' coordinates was not the answer either -- inside the item the border lands on the
+' initials tile at 1.63:1 against seven of the eight tile colours. The grid's own ring is
+' drawn outside the item and outside the clip, so it needs no geometry at all; it is
+' tinted to the brand green with focusBitmapBlendColor on the grid.
 sub onFocusChange()
     theme = m.theme
     hasFocus = m.top.focusPercent > 0.5
-    m.focusBorder.visible = hasFocus
-    
+
     scale = 1.05
     if theme <> invalid and theme.focusScale <> invalid then scale = theme.focusScale
     

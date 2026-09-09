@@ -20,7 +20,10 @@ sub init()
     theme = getTheme()
     if theme <> invalid
         m.categoryList.color = theme.colorTextDim
-        m.categoryList.focusedColor = theme.colorText
+        ' On-accent, because the chip underneath is now brand green (see the
+        ' focusBitmapBlendColor on categoryList). This line used to set colorText, which
+        ' overwrote the XML value and left off-white on the stock grey chip at 1.29:1.
+        m.categoryList.focusedColor = theme.colorOnAccent
         m.headerLabel.color = theme.colorText
         m.emptyLabel.color = theme.colorTextDim
         m.toastBg.color = theme.colorSurface
