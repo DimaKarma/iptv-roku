@@ -1,0 +1,97 @@
+# Capture the TV's favorites and recents BEFORE a sideload.
+#
+# Why this exists: the Roku registry survives a normal reinstall, but a CORRUPT package
+# does not -- one bad zip made the TV answer "Unzip failed... Unloading" and the entire
+# userdata section was gone, with no copy anywhere. cachefs is no backup either, since a
+# reinstall wipes it. The debug console on port 8085 is the only way data leaves the box,
+# so the app prints "[STORE] favorites=..." / "[STORE] recents=..." on every playlist
+# load and this function relaunches the channel, reads those two lines, and files them.
+
+function Save-RokuStore {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$RokuIp,
+        [Parameter(Mandatory = $true)][string]$OutDir,
+        [int]$TimeoutSeconds = 45
+    )
+
+    # RokuIp may carry a port for the install server; the ECP and console ports are fixed.
+    $host_ = $RokuIp.Split(':')[0]
+
+    if (-not (Test-Path -LiteralPath $OutDir)) {
+        New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+    }
+
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $connect = $client.BeginConnect($host_, 8085, $null, $null)
+        if (-not $connect.AsyncWaitHandle.WaitOne(5000)) {
+            throw "Debug console on ${host_}:8085 did not accept a connection."
+        }
+        $client.EndConnect($connect)
+        $stream = $client.GetStream()
+
+        # Relaunch so the app re-runs its playlist load and prints the store again.
+        # Failure here is not fatal: the channel may already be starting.
+        try {
+            Invoke-WebRequest -Uri "http://${host_}:8060/launch/dev" -Method POST `
+                -TimeoutSec 10 -UseBasicParsing | Out-Null
+        } catch {
+            Write-Host "  (relaunch request failed; reading the console anyway)"
+        }
+
+        $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+        $buffer = New-Object byte[] 8192
+        $text = ""
+        $favorites = $null
+        $recents = $null
+
+        while ((Get-Date) -lt $deadline) {
+            if ($stream.DataAvailable) {
+                $read = $stream.Read($buffer, 0, $buffer.Length)
+                if ($read -gt 0) {
+                    $text += [System.Text.Encoding]::UTF8.GetString($buffer, 0, $read)
+                }
+            } else {
+                Start-Sleep -Milliseconds 200
+            }
+            if ($null -eq $favorites) {
+                $m = [regex]::Match($text, '\[STORE\] favorites=(.*)')
+                if ($m.Success -and $m.Groups[1].Value -match '\]') { $favorites = $m.Groups[1].Value.Trim() }
+            }
+            if ($null -eq $recents) {
+                $m = [regex]::Match($text, '\[STORE\] recents=(.*)')
+                if ($m.Success -and $m.Groups[1].Value -match '\]') { $recents = $m.Groups[1].Value.Trim() }
+            }
+            if ($null -ne $favorites -and $null -ne $recents) { break }
+        }
+
+        if ($null -eq $favorites -or $null -eq $recents) {
+            throw ("No [STORE] lines appeared on the console within $TimeoutSeconds s. " +
+                   "The build currently on the TV predates the store dump, or the channel " +
+                   "did not reach its playlist load.")
+        }
+
+        # Parse to prove it is real JSON before calling it a backup. An unparseable
+        # capture is not a backup, and saving it would be worse than failing loudly.
+        $favObj = $favorites | ConvertFrom-Json
+        $recObj = $recents | ConvertFrom-Json
+        $favCount = @($favObj).Count
+        $recCount = @($recObj).Count
+
+        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+        $path = Join-Path $OutDir "store-$stamp.json"
+        $payload = [ordered]@{
+            capturedAt = (Get-Date).ToString('s')
+            rokuIp     = $host_
+            favorites  = $favObj
+            recents    = $recObj
+        }
+        $payload | ConvertTo-Json -Depth 5 | Out-File -FilePath $path -Encoding utf8
+
+        Write-Host "  Store backed up: $favCount favorites, $recCount recents -> $path"
+        return $path
+    } finally {
+        $client.Close()
+    }
+}

@@ -109,6 +109,23 @@ function PushRecent(name as string) as void
     SaveRecents(recents)
 end function
 
+' Print favorites and recents to the debug console (port 8085) so they can be captured
+' OFF the device before a sideload. The registry survives a normal reinstall, but a
+' CORRUPT package does not -- a bad zip once made the TV answer "Unzip failed...
+' Unloading" and the whole userdata section was gone, with no copy anywhere. cachefs is
+' no help: a reinstall wipes it too. The console is the only channel out of the box, so
+' deploy.ps1 captures these two lines before it installs anything.
+' Format is deliberately one key per line with a fixed prefix, so a capture script can
+' find them without parsing the surrounding log.
+sub DumpStore()
+    favs = LoadFavorites()
+    recents = LoadRecents()
+    if favs = invalid then favs = []
+    if recents = invalid then recents = []
+    print "[STORE] favorites=" + FormatJson(favs)
+    print "[STORE] recents=" + FormatJson(recents)
+end sub
+
 ' Old entries are URLs (contain "://"). Convert them using the current playlist; drop unmatched.
 sub MigrateStoreToNames(channels as object)
     if channels = invalid then return
