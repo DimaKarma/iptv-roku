@@ -39,6 +39,11 @@ source/restore.json
 # Favorites/recents captured from the TV before each sideload (contains channel names)
 backups/
 
+# Archived copies of the packages the TV actually accepted, kept as rollback targets.
+# They contain config.json (the subscription token) and source/restore.json (the owner's
+# channel names), so they must never reach this public repo.
+builds/
+
 # Dev tooling only: the BrightScript compiler used as a pre-deploy gate.
 # Restore it with `npm ci`; nothing in here reaches the TV build.
 node_modules/
