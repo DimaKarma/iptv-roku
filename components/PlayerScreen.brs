@@ -354,6 +354,12 @@ end sub
 
 sub openZapper()
     if m.top.playlist = invalid or m.top.playlist.Count() = 0 then return
+    ' Time the rebuild. This runs on the render thread, so it must be the GLOBAL Uptime()
+    ' and never CreateObject("roTimespan") -- that is a MAIN|TASK-only component and rule
+    ' 20 makes it a hard failure here. The number settles a standing open item: the panel
+    ' recreates every node on every open, and nobody has ever measured whether that costs
+    ' anything on 1548 channels or is lost in the noise.
+    t0 = Uptime(0)
     ' hide overlay/banner
     hideOverlay()
     hideMiniBanner()
@@ -379,6 +385,9 @@ sub openZapper()
     m.zapperPanel.visible = true
     m.zapperGrid.setFocus(true)         ' focus the GRID, not the panel (rule #9)
     m.zapperTimer.control = "start"
+    ' Index, never the group title: the console on 8085 is unauthenticated, and one of
+    ' this playlist's categories is one the owner would not want printed.
+    print "[ZAPPER] open items="; m.top.playlist.Count(); " ms="; Int((Uptime(0) - t0) * 1000)
 end sub
 
 sub focusPlayer()

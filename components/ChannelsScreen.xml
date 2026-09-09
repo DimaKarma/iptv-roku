@@ -16,12 +16,20 @@
     
     <children>
         <!-- Rail on the left -->
+        <!-- focusBitmapBlendColor MULTIPLIES the stock focus bitmap. The stock chip is
+             #D5D5D5, so 0x5FD345 lands on #4FB03A exactly - the brandbook green. Paired
+             with on-accent text that is 6.86:1; off-white on the stock grey chip was
+             1.29:1, and green-bright on it is 1.26:1, so deleting the runtime override
+             instead of changing it would have been a regression. Blending only darkens,
+             which is why the UNFOCUSED chip (a separate, darker #303531 footprint bitmap)
+             cannot be tinted this way at all - that needs its own bitmap. -->
         <LabelList id="categoryList"
                    translation="[96, 54]"
                    itemSize="[380, 50]"
                    itemSpacing="[0, 10]"
                    color="0x8A968EFF"
-                   focusedColor="0x74D45BFF"
+                   focusedColor="0x08130AFF"
+                   focusBitmapBlendColor="0x5FD345FF"
                    numRows="15" />
                    
         <!-- Header -->
@@ -32,13 +40,20 @@
                height="40" />
                
         <!-- Grid on the right -->
+        <!-- The grid draws the focus ring itself, OUTSIDE the item and outside its own
+             clip, so it is the only indicator that reaches all four sides of every cell
+             including the edge columns. Stock is #E7E9E8; 0x57C140 multiplies to #4FB03A
+             exactly. This also matches the brandbook, whose .card.focused is a box-shadow
+             OUTSIDE the card - the card's own inner border was the thing moving away
+             from it. -->
         <MarkupGrid id="channelGrid"
                     translation="[500, 114]"
                     itemComponentName="ChannelCard"
                     itemSize="[330, 220]"
                     itemSpacing="[12, 12]"
                     numColumns="4"
-                    numRows="4" />
+                    numRows="4"
+                    focusBitmapBlendColor="0x57C140FF" />
                     
         <!-- Empty / Not Found Label -->
         <Label id="emptyLabel"
@@ -50,8 +65,10 @@
                visible="false" />
                
         <!-- Toast -->
+        <!-- 990 + 60 high put the toast's bottom edge at 1050, i.e. 60px inside the
+             overscan margin on a 1080 panel. -->
         <Rectangle id="toastBg"
-                   translation="[460, 990]"
+                   translation="[460, 920]"
                    width="1000"
                    height="60"
                    color="0x18211CFF"

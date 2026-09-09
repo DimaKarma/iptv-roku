@@ -17,11 +17,17 @@ function Save-DeployRecord {
     param(
         [Parameter(Mandatory = $true)][string]$ZipPath,
         [Parameter(Mandatory = $true)][string]$ProjectRoot,
-        [string]$Response = "",
+        # NOT [string]: curl.exe returns its output as an ARRAY OF LINES, and a typed
+        # [string] parameter refuses to coerce a multi-element Object[] -- it throws
+        # "Cannot convert value to type System.String" AFTER a successful install, which
+        # is the worst possible moment for a bookkeeping helper to fail. Accept anything
+        # and flatten it below.
+        $Response = "",
         [string]$StorePath = ""
     )
 
     try {
+        $Response = ($Response -join "`n")
         $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss')
 
         $localMd5 = (Get-FileHash -Algorithm MD5 -LiteralPath $ZipPath).Hash.ToLower()

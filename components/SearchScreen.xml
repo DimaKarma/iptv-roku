@@ -28,13 +28,16 @@
                width="800"
                height="40" />
                
+        <!-- Same ChannelCard, so the same focus treatment: without the blend this screen
+             would keep the stock white ring while the Channels grid went green. -->
         <MarkupGrid id="channelGrid"
                     translation="[96, 220]"
                     itemComponentName="ChannelCard"
                     itemSize="[330, 220]"
                     itemSpacing="[12, 12]"
                     numColumns="4"
-                    numRows="3" />
+                    numRows="3"
+                    focusBitmapBlendColor="0x57C140FF" />
                     
         <Label id="statusLabel"
                translation="[96, 400]"

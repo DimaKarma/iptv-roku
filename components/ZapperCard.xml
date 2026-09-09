@@ -21,12 +21,17 @@
         <Label id="favStar" text="★" translation="[490, 10]" color="0x74D45BFF" visible="false" />
         <Rectangle id="badge" width="20" height="20" translation="[490, 50]" visible="false" />
 
-        <!-- focus border for the 520×88 row -->
+        <!-- Focus border for the 520x88 row, INSIDE the row's own bounds.
+             These were at [-4,-4] like ChannelCard's, and zapperGrid is numColumns="1",
+             so every row is column 0 and the left rectangle fell outside the grid's
+             viewport on EVERY row - not just the first. zapperGrid also carries
+             drawFocusFeedback="false", so nothing was covering the loss. ZapperCard does
+             not scale, so this is a plain offset with no scale arithmetic to satisfy. -->
         <Group id="focusBorder" visible="false">
-            <Rectangle width="528" height="4" translation="[-4, -4]" color="0x4FB03AFF" />
-            <Rectangle width="528" height="4" translation="[-4, 88]" color="0x4FB03AFF" />
-            <Rectangle width="4" height="96" translation="[-4, -4]" color="0x4FB03AFF" />
-            <Rectangle width="4" height="96" translation="[520, -4]" color="0x4FB03AFF" />
+            <Rectangle width="520" height="4" translation="[0, 0]" color="0x4FB03AFF" />
+            <Rectangle width="520" height="4" translation="[0, 84]" color="0x4FB03AFF" />
+            <Rectangle width="4" height="88" translation="[0, 0]" color="0x4FB03AFF" />
+            <Rectangle width="4" height="88" translation="[516, 0]" color="0x4FB03AFF" />
         </Group>
     </children>
 </component>
