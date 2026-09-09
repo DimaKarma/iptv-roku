@@ -69,30 +69,77 @@ function Save-RokuStore {
             Write-Host "  (relaunch request failed; reading the console anyway)"
         }
 
+        # Take the LAST [STORE] pair in the window, never the first.
+        #
+        # The first one lies. Measured 2026-09-10: a single relaunch printed
+        # "favorites=<32 entries>" and then "favorites=<31 entries>" for one unchanged
+        # registry. The outgoing app instance flushes its own buffered console output into
+        # this socket as Home + /launch/dev restart it, so the earliest lines can belong to
+        # the PREVIOUS run -- and the app also dumps the store twice per launch, once for
+        # the cached playlist and once for the network one. Matching the first hit wrote a
+        # restore seed of 32 for a device holding 31. That direction was harmless; the same
+        # mechanism can just as easily ship a seed that is BEHIND the device, which is
+        # precisely the loss the seed exists to prevent.
+        #
+        # Waiting for quiet rather than for a fixed delay keeps this independent of how
+        # long the TV takes to boot and fetch a playlist -- a number that has no business
+        # being hardcoded here.
         $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
         $buffer = New-Object byte[] 8192
         $text = ""
         $favorites = $null
         $recents = $null
+        $quietFor = 0
+        $QUIET_MS = 3000        # no new console output for this long = the burst is over
 
         while ((Get-Date) -lt $deadline) {
             if ($stream.DataAvailable) {
                 $read = $stream.Read($buffer, 0, $buffer.Length)
                 if ($read -gt 0) {
                     $text += [System.Text.Encoding]::UTF8.GetString($buffer, 0, $read)
+                    $quietFor = 0
                 }
             } else {
                 Start-Sleep -Milliseconds 200
+                $quietFor += 200
             }
-            if ($null -eq $favorites) {
-                $m = [regex]::Match($text, '\[STORE\] favorites=(.*)')
-                if ($m.Success -and $m.Groups[1].Value -match '\]') { $favorites = $m.Groups[1].Value.Trim() }
+
+            # Only look AFTER the fence: Roku logs `scrpt.ctx.run.enter` when a channel
+            # starts, so the last occurrence of it marks the beginning of the instance we
+            # just launched. Everything before it is the previous run's output, which the
+            # console hands over in one burst the moment this socket connects -- including
+            # its own [STORE] lines. Waiting for quiet is not enough on its own: the burst
+            # goes quiet within a second or two, long before the new instance has fetched a
+            # playlist, so a quiet-only rule still reads the old numbers (measured: it
+            # returned in 6s, when a real load takes ~20).
+            $fence = $text.LastIndexOf('scrpt.ctx.run.enter')
+            $window = if ($fence -ge 0) { $text.Substring($fence) } else { $text }
+
+            $favMatches = [regex]::Matches($window, '\[STORE\] favorites=(.*)')
+            if ($favMatches.Count -gt 0) {
+                $last = $favMatches[$favMatches.Count - 1]
+                if ($last.Groups[1].Value -match '\]') { $favorites = $last.Groups[1].Value.Trim() }
             }
-            if ($null -eq $recents) {
-                $m = [regex]::Match($text, '\[STORE\] recents=(.*)')
-                if ($m.Success -and $m.Groups[1].Value -match '\]') { $recents = $m.Groups[1].Value.Trim() }
+            $recMatches = [regex]::Matches($window, '\[STORE\] recents=(.*)')
+            if ($recMatches.Count -gt 0) {
+                $last = $recMatches[$recMatches.Count - 1]
+                if ($last.Groups[1].Value -match '\]') { $recents = $last.Groups[1].Value.Trim() }
             }
-            if ($null -ne $favorites -and $null -ne $recents) { break }
+
+            # Stop once a pair is in hand AND the console has gone quiet, so a later dump
+            # in the same burst cannot be missed by breaking on the first one.
+            if ($null -ne $favorites -and $null -ne $recents -and $quietFor -ge $QUIET_MS) { break }
+        }
+
+        if ($fence -lt 0) {
+            # Never silently: without the fence this capture cannot prove it belongs to the
+            # instance we just started, and a store backup that might be one run stale is
+            # the one thing this tool must not hand over quietly.
+            Write-Host ("  WARNING: no channel-start marker seen on the console, so this " +
+                        "capture may belong to the previous run. Re-run before trusting it.")
+        }
+        if ($favMatches -and $favMatches.Count -gt 1) {
+            Write-Host ("  ({0} store dumps seen after the channel started; using the last)" -f $favMatches.Count)
         }
 
         if ($null -eq $favorites -or $null -eq $recents) {
