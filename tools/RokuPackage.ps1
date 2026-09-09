@@ -1,3 +1,11 @@
+# Windows PowerShell 5.1 does not load this assembly by default. Without it
+# [System.IO.Compression.ZipFile] raises TypeNotFound, which the catch below would
+# report as a broken archive -- so a perfectly valid package looks corrupt. Loading
+# it here, at file scope, keeps it out of the function body: type literals inside a
+# function are resolved when that function is compiled, which happens before any
+# statement in its body runs.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
 function Test-RokuPackage {
     [CmdletBinding()]
     param(
@@ -27,7 +35,9 @@ function Test-RokuPackage {
     try {
         $archive = [System.IO.Compression.ZipFile]::OpenRead($Path)
     } catch {
-        throw "Roku package is not a ZIP archive: $Path"
+        # Keep the underlying reason: "cannot open" and "not a ZIP" are different
+        # failures, and hiding one behind the other is what made this validator lie.
+        throw "Roku package is not a ZIP archive: ${Path} ($($_.Exception.Message))"
     }
 
     try {
