@@ -84,6 +84,53 @@ def norm(s):
     return s
 
 
+# The Roku default font has no glyph for most symbols, and an unmapped character is
+# drawn as an empty box. The upstream feed prefixes live broadcasts with U+22D7 "greater
+# than with dot" and sprinkles U+25B6, emoji variation selectors and the odd Hangul
+# syllable through titles, all of which reach the TV as boxes -- visible on Eurosport 1
+# HD as a leading square before "Велоспорт".
+#
+# A whitelist, not a blacklist: keep only what is known to render (Latin, Cyrillic,
+# digits, ASCII punctuation, and the handful of typographic characters confirmed on a
+# real screenshot), and drop the rest. A rare glyph lost is better than a box shown, and
+# a blacklist would need extending every time the feed invents a new marker.
+_RENDERABLE_EXTRA = set(
+    "—"   # em dash        - confirmed rendering in "CHANNELS - Favorites"
+    "–"   # en dash
+    "…"   # ellipsis       - confirmed in truncated card titles
+    "«»"  # guillemets - confirmed in "«Хокум»"
+    "★"   # star           - confirmed in the rail
+    "°"   # degree
+    "ёЁ"                    # yo
+    "іїєґІЇЄҐ"  # Ukrainian i yi ye g
+)
+_TITLE_MAP = {
+    "№": "No ",   # numero sign
+    "’": "'", "‘": "'",
+    "“": '"', "”": '"', "„": '"',
+    " ": " ",     # nbsp
+}
+
+
+def clean_title(s):
+    """Strip characters the Roku font cannot draw. Returns (text, was_changed)."""
+    out = []
+    for ch in s:
+        if ch in _TITLE_MAP:
+            out.append(_TITLE_MAP[ch])
+            continue
+        o = ord(ch)
+        if o == 0x20 or (0x21 <= o <= 0x7E):        # ASCII printable
+            out.append(ch)
+        elif 0x0410 <= o <= 0x044F:                 # Cyrillic А-я
+            out.append(ch)
+        elif ch in _RENDERABLE_EXTRA:
+            out.append(ch)
+        # anything else is dropped
+    cleaned = " ".join("".join(out).split())
+    return cleaned, cleaned != s
+
+
 def parse_xmltv_time(t):
     """'20260716120000 +0300' -> utc epoch (int)."""
     t = (t or "").strip()
@@ -125,6 +172,7 @@ def main():
     name_has_cid = set()  # names that already picked one feed (so +2/+4 feeds don't merge)
     epg = {}
     n_prog = 0
+    n_cleaned = 0
 
     ctx = safe_iterparse(gz, events=("end",))
     for ev, el in ctx:
@@ -150,6 +198,9 @@ def main():
                 if s is not None and e is not None and e >= lo and s <= hi:
                     title_el = el.find("title")
                     title = (title_el.text if title_el is not None else "") or ""
+                    title, changed = clean_title(title)
+                    if changed:
+                        n_cleaned += 1
                     epg.setdefault(nm, []).append({"s": s, "e": e, "t": title})
                     n_prog += 1
             el.clear()
@@ -179,6 +230,7 @@ def main():
     size = os.path.getsize(out_path)
     print("Matched channels with EPG: %d / %d" % (len(epg), len(names)))
     print("Programmes in window: %d" % n_prog)
+    print("Titles cleaned of unrenderable characters: %d" % n_cleaned)
     print("epg.json size: %.2f MB" % (size / 1024.0 / 1024.0))
 
 
