@@ -20,7 +20,8 @@ sub init()
     m.keyboardCancel.observeField("buttonSelected", "onKeyboardCancel")
     m.toastTimer.observeField("fire", "hideToast")
     m.top.observeField("visible", "onVisibleChange")
-    
+    m.top.observeField("noticeCommand", "onNotice")
+
     theme = getTheme()
     if theme <> invalid
         m.headerLabel.color = theme.colorText
@@ -89,10 +90,22 @@ sub updateInfo()
             if info.channelCount <> invalid then text = text + "Channels: " + info.channelCount.ToStr() + chr(10)
             if info.fetchedAt <> invalid then text = text + "Updated: " + info.fetchedAt + chr(10)
             if info.source <> invalid then text = text + "Source: " + info.source + chr(10)
+            ' Three distinct states. The old code printed "not set" whenever epgCount
+            ' was invalid, which is exactly what a FAILED load leaves behind -- so a
+            ' user with a configured but broken EPG URL was told they had no EPG URL.
             if info.epgCount <> invalid and info.epgCount > 0 then
                 text = text + "EPG: " + info.epgCount.ToStr() + " channels"
+            else if info.epgFailed <> invalid and info.epgFailed = true then
+                text = text + "EPG: unavailable"
             else
                 text = text + "EPG: not set"
+            end if
+            ' Guide age. The July 2026 outage was invisible because a weeks-old guide
+            ' looks exactly like "this channel has no programmes"; a timestamp here is
+            ' the cheapest way to tell those apart. Shown even when the last load
+            ' failed, since the stale data is what the app is actually serving.
+            if info.epgGeneratedText <> invalid and info.epgGeneratedText <> "" then
+                text = text + chr(10) + "Guide updated: " + info.epgGeneratedText
             end if
         end if
         text = text + chr(10) + chr(10) + "(c) 2026 DimaKarma"
@@ -120,7 +133,7 @@ sub onItemSelected()
         m.keyboardBg.visible = true
         m.keyboard.setFocus(true)
     else if idx = 1 ' Refresh
-        m.top.action = "refresh"
+        sendAction("refresh")
     else if idx = 2 ' EPG
         info = m.top.info
         if info <> invalid and info.epgUrl <> invalid
@@ -144,7 +157,7 @@ sub onItemSelected()
             fs.Delete("cachefs:/epg.json")
         end if
         showToast("Cache cleared")
-        m.top.action = "clearCache"
+        sendAction("clearCache")
     else if idx = 4 ' About
         ' Do nothing
     end if
@@ -160,12 +173,12 @@ sub onKeyboardSave()
         sec.Write("epgUrl", url)
         sec.Flush()
         m.top.newUrl = url
-        m.top.action = "epgChanged"
+        sendAction("epgChanged")
     else
         sec.Write("playlistUrl", url)
         sec.Flush()
         m.top.newUrl = url
-        m.top.action = "urlChanged"
+        sendAction("urlChanged")
     end if
 end sub
 
@@ -208,6 +221,18 @@ function onKeyEvent(key as string, press as boolean) as boolean
     end if
     return handled
 end function
+
+' The only place allowed to write m.top.action. Sets the payload first, then toggles
+' the trigger, so MainScene always reads a matching action. Writing m.top.action
+' directly elsewhere would be dead on a repeat, which is the bug this replaces.
+sub sendAction(name as string)
+    m.top.action = name
+    m.top.actionCommand = not m.top.actionCommand
+end sub
+
+sub onNotice()
+    showToast(m.top.notice)
+end sub
 
 sub showToast(msg as string)
     m.toastLabel.text = msg

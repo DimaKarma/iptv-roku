@@ -4,8 +4,15 @@
     <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
     <interface>
         <field id="info" type="assocarray" onChange="onInfoChange" />
+        <!-- action carries WHICH action; actionCommand is the trigger that fires it.
+             A field observer only fires when the value CHANGES, so repeating the same
+             action (Refresh, then Refresh again) would never reach MainScene if the
+             string alone were observed. Same idiom as playCommand in PlayerScreen. -->
         <field id="action" type="string" />
+        <field id="actionCommand" type="boolean" />
         <field id="newUrl" type="string" />
+        <field id="notice" type="string" />
+        <field id="noticeCommand" type="boolean" />
         <field id="exitRequested" type="boolean" />
     </interface>
 
