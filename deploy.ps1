@@ -41,7 +41,7 @@ if ($LASTEXITCODE -ne 0) {
 if ($response -match "Install Failure") {
     Write-Host "Deploy failed: Install Failure"
     exit 1
-} else if ($response -match "Install Success") {
+} elseif ($response -match "Install Success") {
     Write-Host "Deploy successful!"
 } else {
     Write-Error "Deploy failed: Roku returned an unrecognized response."
