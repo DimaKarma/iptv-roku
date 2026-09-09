@@ -61,6 +61,28 @@ Describe 'Roku package validation' {
         $errorRecord.Exception.Message | Should Match 'missing required entry'
     }
 
+    It 'accepts a package given a RELATIVE path from another directory' {
+        # Regression: Set-Location moves PowerShell's location but not the process
+        # working directory, so a relative path resolved fine by Test-Path and then
+        # failed inside [System.IO.File]::OpenRead. It only shows up when the caller's
+        # process CWD differs from the script's directory -- which is exactly what a
+        # real deploy does, and what every earlier test here happened not to do.
+        $archivePath = Join-Path $testRoot 'relative.zip'
+        New-TestRokuPackage -path $archivePath -entries @('manifest', 'config.json', 'source/main.brs', 'components/MainScene.xml', 'images/splash.png')
+
+        $originalCwd = [System.IO.Directory]::GetCurrentDirectory()
+        Push-Location $testRoot
+        try {
+            [System.IO.Directory]::SetCurrentDirectory($env:TEMP)   # process CWD elsewhere
+            Test-RokuPackage -Path 'relative.zip' | Should Be $true
+        } finally {
+            Pop-Location
+            # Restore the ORIGINAL process CWD, and only after Pop-Location: leaving it
+            # inside TestDrive keeps a handle open and Pester cannot clean the drive up.
+            [System.IO.Directory]::SetCurrentDirectory($originalCwd)
+        }
+    }
+
     It 'accepts a package with all required Roku roots' {
         $archivePath = Join-Path $testRoot 'valid.zip'
         New-TestRokuPackage -path $archivePath -entries @('manifest', 'config.json', 'source/main.brs', 'components/MainScene.xml', 'images/splash.png')
