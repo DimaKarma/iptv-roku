@@ -61,8 +61,11 @@
         </Rectangle>
                
         <!-- Toast -->
+        <!-- 920, matching ChannelsScreen. At 950 the 60px-high toast ended at 1010,
+             70px from the panel edge against a 90px advisory margin - the same defect
+             T1-6 fixed on the other screen and did not sweep for here. -->
         <Rectangle id="toastBg"
-                   translation="[460, 950]"
+                   translation="[460, 920]"
                    width="1000"
                    height="60"
                    color="0x18211CFF"
