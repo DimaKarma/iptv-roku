@@ -84,7 +84,11 @@ sub updateInfo()
     else if idx = 3 ' Cache
         text = "Delete cached playlist data and metadata."
     else if idx = 4 ' About
-        text = "IPTV Player v0.1" + chr(10)
+        ' Kept in step with the manifest by tests/BrightScript.Lint.Tests.ps1.
+        ' roAppInfo would read it at runtime, but nothing in this project uses that
+        ' object yet and rule 20 shows some CreateObject types fault on the render
+        ' thread - which a Settings screen is. Not worth an install to find out.
+        text = "IPTV Player v1.0" + chr(10)
         text = text + "Made for people. Completely free. Install and watch." + chr(10) + chr(10)
         if info <> invalid
             if info.channelCount <> invalid then text = text + "Channels: " + info.channelCount.ToStr() + chr(10)

@@ -87,6 +87,27 @@ Describe 'Deploy gates contract' {
         $pkg.devDependencies.brighterscript | Should Match '^\d+\.\d+\.\d+$'
     }
 
+    It 'keeps the About version in step with the manifest' {
+        # The version lives in two places: the manifest, which is what ECP and the Roku
+        # home screen report, and a literal in the About text, which is what the owner
+        # sees. They drifted once already - the manifest went to 1.0.0 while About still
+        # said v0.1 - and nothing caught it but a screenshot. roAppInfo would remove the
+        # duplication, but no code here uses that object and rule 20 shows some
+        # CreateObject types fault on the render thread, so the duplication stays and
+        # this test is what makes it safe.
+        $manifest = Get-Content -Raw (Join-Path $projectRoot 'manifest')
+        $major = [regex]::Match($manifest, 'major_version=(\d+)').Groups[1].Value
+        $minor = [regex]::Match($manifest, 'minor_version=(\d+)').Groups[1].Value
+        # Positive control: the manifest really was read and really has those keys.
+        $major | Should Not BeNullOrEmpty
+        $minor | Should Not BeNullOrEmpty
+
+        $about = Get-Content -Raw (Join-Path $projectRoot 'components\SettingsScreen.brs')
+        $shown = [regex]::Match($about, 'IPTV Player v(\d+\.\d+)').Groups[1].Value
+        $shown | Should Not BeNullOrEmpty
+        $shown | Should Be "$major.$minor"
+    }
+
     It 'dispatches the error menu by action, never by a hardcoded index' {
         # The error dialog's menu is VARIABLE LENGTH -- the favourite row is built only for
         # a channel that already is one. An index-based dispatch therefore moves "Back"
