@@ -47,3 +47,6 @@ builds/
 # Dev tooling only: the BrightScript compiler used as a pre-deploy gate.
 # Restore it with `npm ci`; nothing in here reaches the TV build.
 node_modules/
+
+# The pre-push scanner needs the secrets to look for them. Never commit them.
+tools/secret-needles.txt
