@@ -114,6 +114,11 @@ ALLOWED_CYRILLIC = {
     "tools/check_m3u_names.py":
         "A parser fixture built from a real channel name, which is the point of "
         "the fixture.",
+    "epg.json":
+        "The generated guide on the epg-data branch: provider programme titles and "
+        "channel names, written by the Action. Same class as epg/channels.txt. "
+        "Without this entry a --all scan reports ~464 blocking hits, one per bot "
+        "commit, and a tool that cries wolf 464 times is a tool nobody reads.",
 }
 
 def has_cyrillic(text):
@@ -208,8 +213,14 @@ if blocking:
 else:
     print("SECRETS: clean (token, playlist URL and provider host in zero blobs)")
 
+seen_expl = set()
 for c, p, name in explained:
-    print("  known, allowed: " + p + " <- " + name)
+    if (p, name) in seen_expl:
+        continue
+    seen_expl.add((p, name))
+    n = sum(1 for _, pp, nn in explained if (pp, nn) == (p, name))
+    where = " (in " + str(n) + " commits)" if n > 1 else ""
+    print("  known, allowed: " + p + " <- " + name + where)
     print("      " + ALLOWED[(p, name)])
 
 cyr_block = [x for x in cyr if x[1] not in ALLOWED_CYRILLIC]
@@ -219,9 +230,11 @@ if cyr_block:
         print("  " + c + "  " + p)
 else:
     print("CYRILLIC: clean (only provider data, each entry justified below)")
-for c, p in sorted(set((c, p) for c, p in cyr)):
+for p in sorted(set(p for _, p in cyr)):
     if p in ALLOWED_CYRILLIC:
-        print("  known, allowed: " + p)
+        n = sum(1 for _, pp in cyr if pp == p)
+        where = " (in " + str(n) + " commits)" if n > 1 else ""
+        print("  known, allowed: " + p + where)
         print("      " + ALLOWED_CYRILLIC[p])
 
 # A stale allowlist is a silent hole: the file moved, the entry stopped
