@@ -42,19 +42,66 @@ jobs:
         run: |
           git config user.name "epg-bot"
           git config user.email "epg-bot@users.noreply.github.com"
-          cp epg/epg.json "$RUNNER_TEMP/epg.json"
-          git fetch origin epg-data
-          # Work on epg-data in a throwaway worktree so main is never touched.
-          git worktree add -B epg-data "$RUNNER_TEMP/wt" origin/epg-data
-          cp "$RUNNER_TEMP/epg.json" "$RUNNER_TEMP/wt/epg.json"
-          cd "$RUNNER_TEMP/wt"
-          git add epg.json
-          if git diff --cached --quiet; then
-            echo "No EPG changes."
-          else
-            git commit -m "Update EPG $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            # The credential is supplied here and nowhere else. Passing it in the URL
-            # rather than via `git remote set-url` keeps it out of .git/config; Actions
-            # masks the secret in the log either way.
-            git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" epg-data
-          fi
+
+          # Publish ONE rootless commit and force-push it, so the branch never holds more
+          # than the current guide. Built with plumbing: no checkout, no worktree, and --
+          # the reason this was rewritten -- no `git fetch origin epg-data`.
+          #
+          # actions/checkout uses fetch-depth 1, but a later `git fetch <remote> <branch>`
+          # is NOT depth-limited, so that one line pulled the branch's entire history on
+          # every run. Measured against this remote: 286.57 KiB for the checkout, 89.45 MiB
+          # after the fetch, 464 commits, 21 seconds -- roughly 780 MiB a day to publish a
+          # 923 KB file, and growing.
+          #
+          # There is no "skip when unchanged" branch because there is nothing to skip:
+          # generate_epg.py stamps {"generated": int(time.time())} into every file, so the
+          # blob differs every run by construction. "No EPG changes." never printed once in
+          # 463 runs. Runs are serialised by the `concurrency` group above, so two
+          # force-pushes cannot race.
+
+          # The artefact must be a plausible guide before anything is hashed. A zero-byte
+          # epg/epg.json otherwise passes through this whole block and publishes cleanly.
+          python -c "
+          import json
+          d = json.load(open('epg/epg.json', encoding='utf-8'))
+          n = len(d.get('epg', {}))
+          assert n and n == d.get('count'), 'degenerate guide: count=%r epg=%d' % (d.get('count'), n)
+          print('guide ok: %d channels' % n)
+          "
+
+          # The generator writes epg/epg.json, and `git mktree` rejects a path containing a
+          # slash, so the TREE ENTRY is named epg.json while the SOURCE stays epg/epg.json.
+          # --no-filters: .gitattributes at the root of main sets `* text=auto eol=lf` and
+          # applies to paths under epg/ too, while the old `git add` ran on the epg-data
+          # branch, which carries no .gitattributes. Measured: this only changes the hash
+          # for CRLF input -- a multi-line LF file hashes identically either way -- so it
+          # guards a Windows-authored file reaching the generator, not indentation.
+          blob=$(git hash-object -w --no-filters epg/epg.json)
+          tree=$(printf '100644 blob %s\tepg.json\n' "$blob" | git mktree)
+
+          # A slashed path fails loudly; a TYPO does not. `epg.jsn` builds a tree at exit 0,
+          # commits, force-pushes, and leaves a GREEN run serving 404 to the television --
+          # with no previous commit on the branch to fall back to. Hence this assertion.
+          entry=$(git ls-tree --name-only "$tree")
+          [ "$entry" = "epg.json" ] || { echo "tree entry is '$entry', expected 'epg.json'"; exit 1; }
+
+          # Anonymous and read-only: the repo is public, so the credential still appears in
+          # exactly one place, the push below.
+          PUBLIC="https://github.com/${GITHUB_REPOSITORY}.git"
+          prev=$(git ls-remote "$PUBLIC" refs/heads/epg-data | cut -f1)
+          commit=$(git commit-tree "$tree" -m "EPG $(date -u +%Y-%m-%dT%H:%M:%SZ)")
+          # The branch keeps one commit, so there is no parent to roll back to -- but a
+          # force-pushed commit stays reachable by sha on GitHub for a long time (a414668,
+          # pushed off main in July, still serves today). Logging the previous tip is the
+          # whole rollback story: git push --force <url> <prev>:refs/heads/epg-data
+          echo "previous tip: ${prev:-none}  publishing: $commit  blob: $blob"
+
+          # The credential is supplied here and nowhere else. Passing it in the URL rather
+          # than via `git remote set-url` keeps it out of .git/config; Actions masks the
+          # secret in the log either way.
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "$commit:refs/heads/epg-data"
+
+          # A rejected push must not leave a green run.
+          landed=$(git ls-remote "$PUBLIC" refs/heads/epg-data | cut -f1)
+          [ "$landed" = "$commit" ] || { echo "push did not land: remote is '$landed'"; exit 1; }

@@ -117,8 +117,10 @@ ALLOWED_CYRILLIC = {
     "epg.json":
         "The generated guide on the epg-data branch: provider programme titles and "
         "channel names, written by the Action. Same class as epg/channels.txt. "
-        "Without this entry a --all scan reports ~464 blocking hits, one per bot "
-        "commit, and a tool that cries wolf 464 times is a tool nobody reads.",
+        "It only appears in a --all scan, never in a push range, because that "
+        "branch is not an ancestor of main. Until 2026-09-10 it was ~464 blocking "
+        "hits, one per bot commit; the branch now holds a single rootless commit, "
+        "so it is one. A tool that cries wolf 464 times is a tool nobody reads.",
 }
 
 def has_cyrillic(text):
@@ -239,13 +241,17 @@ for p in sorted(set(p for _, p in cyr)):
 
 # A stale allowlist is a silent hole: the file moved, the entry stopped
 # matching, and nothing said so.
-matched_paths = set(p for _, p, _ in hits)
-for (p, name) in ALLOWED:
-    if p not in matched_paths:
-        print("STALE ALLOWLIST ENTRY: " + p + " / " + name + " matched nothing")
-seen_cyr = set(p for _, p in cyr)
-for p in ALLOWED_CYRILLIC:
-    if p not in seen_cyr:
-        print("STALE CYRILLIC ALLOWLIST ENTRY: " + p + " matched nothing")
+if rng.strip() == "--all":
+    matched_paths = set(p for _, p, _ in hits)
+    for (p, name) in ALLOWED:
+        if p not in matched_paths:
+            print("STALE ALLOWLIST ENTRY: " + p + " / " + name + " matched nothing")
+    seen_cyr = set(p for _, p in cyr)
+    for p in ALLOWED_CYRILLIC:
+        if p not in seen_cyr:
+            print("STALE CYRILLIC ALLOWLIST ENTRY: " + p + " matched nothing")
+else:
+    print("(stale-allowlist check skipped: it is only meaningful over --all, "
+          "since a push range legitimately contains few of these paths)")
 
 sys.exit(1 if (blocking or cyr_block) else 0)
