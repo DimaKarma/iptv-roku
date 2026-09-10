@@ -32,11 +32,17 @@
                    focusBitmapBlendColor="0x5FD345FF"
                    numRows="15" />
                    
-        <!-- Header -->
+        <!-- Header. x=530, not 500, and the grid below moves with it.
+             The rail's focus chip is 380 wide by declaration but PAINTS to x=507 - the
+             platform draws that bitmap ~32px past its item on each side. At 500 the
+             header's first letter was drawn ON TOP of the chip's green, overlapping by up
+             to 4 columns. 530 puts 24px of background between them, and the header keeps
+             its left alignment with the first card column because the grid moves too:
+             that alignment is what makes it read as a label FOR the grid. -->
         <Label id="headerLabel"
-               translation="[500, 54]"
+               translation="[530, 54]"
                color="0xECF2EEFF"
-               width="1300"
+               width="1270"
                height="40" />
                
         <!-- Grid on the right -->
@@ -47,7 +53,7 @@
              OUTSIDE the card - the card's own inner border was the thing moving away
              from it. -->
         <MarkupGrid id="channelGrid"
-                    translation="[500, 114]"
+                    translation="[530, 114]"
                     itemComponentName="ChannelCard"
                     itemSize="[330, 220]"
                     itemSpacing="[12, 12]"
@@ -56,9 +62,12 @@
                     focusBitmapBlendColor="0x57C140FF" />
                     
         <!-- Empty / Not Found Label -->
+        <!-- Spans the grid exactly: 530 + 1356 = 1886, so horizAlign="center" centres on
+             the grid's own centre. At [500,400] w1324 it centred on 1162 against the grid's
+             1178 and had always been 16px out. -->
         <Label id="emptyLabel"
-               translation="[500, 400]"
-               width="1324"
+               translation="[530, 400]"
+               width="1356"
                horizAlign="center"
                color="0x8A968EFF"
                text="Nothing found"
