@@ -271,8 +271,12 @@ end sub
 ' hidden when there are items; callers set its text when there are none.
 sub showResults(shown as object, favSet as object)
     gridContent = CreateObject("roSGNode", "ContentNode")
+    ' One guide read per build; the cards show epgNow and read no guide themselves.
+    ' Results are rebuilt on every query, so they pick up a newer guide on the next one.
+    epg = m.global.epg
+    nowSec = m.global.nowSec
     for each ch in shown
-        addChannel(gridContent, ch, (favSet[ch.name] <> invalid))
+        addChannel(gridContent, ch, (favSet[ch.name] <> invalid), epg, nowSec)
     end for
     m.currentChannels = shown
     m.channelGrid.content = gridContent
@@ -306,10 +310,11 @@ sub refreshStars()
     end for
 end sub
 
-sub addChannel(parent as object, ch as object, isFav as boolean)
+sub addChannel(parent as object, ch as object, isFav as boolean, epg as dynamic, nowSec as dynamic)
     item = parent.createChild("ChannelContent")
     
     item.name = ch.name
+    item.epgNow = EpgNowText(epg, ch.name, nowSec)
     item.url = ch.url
     item.group = ch.group
     item.logo = ch.logo

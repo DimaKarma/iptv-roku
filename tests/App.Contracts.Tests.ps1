@@ -11,6 +11,19 @@ $searchXml = Join-Path $projectRoot 'components\SearchScreen.xml'
 $translit = Join-Path $projectRoot 'source\Translit.brs'
 $settingsBrs = Join-Path $projectRoot 'components\SettingsScreen.brs'
 $playerBrs = Join-Path $projectRoot 'components\PlayerScreen.brs'
+$channelsBrs = Join-Path $projectRoot 'components\ChannelsScreen.brs'
+$mainBrs = Join-Path $projectRoot 'components\MainScene.brs'
+$cardBrs = Join-Path $projectRoot 'components\ChannelCard.brs'
+$storeBrs = Join-Path $projectRoot 'source\ChannelStore.brs'
+
+# Source text with the BrightScript comments removed, so a comment that names a function
+# cannot satisfy or break a test that is about the code.
+function Get-BrsCode([string]$text) {
+    return ((($text -split "`n") | ForEach-Object { ($_ -split "'")[0] }) -join "`n")
+}
+function Get-BrsBody([string]$text, [string]$signature) {
+    return [regex]::Match($text, '(?s)' + $signature + '.*?\r?\nend (sub|function)').Value
+}
 
 Describe 'PlaylistTask contract (W1-2, W1-9)' {
     It 'checks the MAIN parse for at least one channel BEFORE merging extras' {
@@ -212,14 +225,20 @@ Describe 'Player inactive guard (error dialog Back must not favourite the dead c
     }
 }
 
-Describe 'Version 1.1 (manifest and About agree)' {
-    It 'manifest says 1.1.2 and the About version starts with 1.1' {
+Describe 'Version (manifest and About agree)' {
+    It 'the manifest triple equals the About appVersion literal' {
         $manifest = Get-Content -Raw (Join-Path $projectRoot 'manifest')
-        [regex]::Match($manifest, 'major_version=(\d+)').Groups[1].Value | Should Be '1'
-        [regex]::Match($manifest, 'minor_version=(\d+)').Groups[1].Value | Should Be '1'
-        [regex]::Match($manifest, 'build_version=(\d+)').Groups[1].Value | Should Be '2'
+        $major = [regex]::Match($manifest, '(?m)^major_version=(\d+)\s*$').Groups[1].Value
+        $minor = [regex]::Match($manifest, '(?m)^minor_version=(\d+)\s*$').Groups[1].Value
+        $build = [regex]::Match($manifest, '(?m)^build_version=(\d+)\s*$').Groups[1].Value
+        # positive control: all three parts were read, so an empty read cannot match an empty read
+        $major | Should Match '^\d+$'
+        $minor | Should Match '^\d+$'
+        $build | Should Match '^\d+$'
         $about = Get-Content -Raw $settingsBrs
-        [regex]::Match($about, 'appVersion = "(\d+\.\d+)\.\d+"').Groups[1].Value | Should Be '1.1'
+        $shown = [regex]::Match($about, '(?m)^\s*appVersion = "(\d+\.\d+\.\d+)"\s*$').Groups[1].Value
+        $shown | Should Match '^\d+\.\d+\.\d+$'
+        $shown | Should Be ($major + '.' + $minor + '.' + $build)
     }
 }
 
@@ -306,5 +325,224 @@ Describe 'Palette contract (teal and signal-orange recolour)' {
 
     It 'manifest splash_color is the new background' {
         (Get-Content -Raw $manifestFile) | Should Match '(?m)^splash_color=#020B13\s*$'
+    }
+}
+
+Describe 'Resume last channel (1.2.0)' {
+    It 'writes the resume channel from exactly one place: onRecentTimer, with m.recentName' {
+        $files = @(Get-ChildItem -Path (Join-Path $projectRoot 'components') -Filter *.brs -Recurse)
+        $files.Count -ge 10 | Should Be $true      # positive control: the sources were read
+        $calls = @()
+        foreach ($f in $files) {
+            $code = Get-BrsCode (Get-Content -Raw $f.FullName)
+            foreach ($m in [regex]::Matches($code, 'SaveLastChannel\(([^)]*)\)')) {
+                $calls += ($f.Name + '|' + $m.Groups[1].Value.Trim())
+            }
+        }
+        @($calls).Count | Should Be 1
+        $calls[0] | Should Be 'PlayerScreen.brs|m.recentName'
+        $timer = Get-BrsCode (Get-BrsBody (Get-Content -Raw $playerBrs) 'sub onRecentTimer\(\)')
+        $timer | Should Match 'SaveLastChannel\(m\.recentName\)'
+    }
+
+    It 'playIndex clears the resume channel inside its IsAdultGroup branch, and only there' {
+        $play = Get-BrsCode (Get-BrsBody (Get-Content -Raw $playerBrs) 'sub playIndex\(idx as integer\)')
+        $play | Should Not BeNullOrEmpty
+        $branch = [regex]::Match($play, '(?s)if IsAdultGroup\(channel\.group\)(.*?)\r?\n\s*else\b').Groups[1].Value
+        $branch | Should Match 'ClearLastChannel\(\)'
+        ([regex]::Matches($play, 'ClearLastChannel\(\)')).Count | Should Be 1
+    }
+
+    It 'PurgeAdultFromRecents clears a stored adult name before its early return' {
+        $store = Get-Content -Raw $storeBrs
+        $body = Get-BrsCode (Get-BrsBody $store 'function PurgeAdultFromRecents\(channels as object\) as integer')
+        $body | Should Not BeNullOrEmpty
+        $iClear = $body.IndexOf('ClearLastChannel()')
+        $early = [regex]::Match($body, 'recents\.Count\(\)\s*=\s*0\s+then\s+return')
+        $early.Success | Should Be $true
+        $iClear | Should BeGreaterThan 0
+        ($iClear -lt $early.Index) | Should Be $true
+    }
+
+    It 'onPlaylistChange only computes: no playRequest in it or in computeResume' {
+        $src = Get-Content -Raw $channelsBrs
+        $change = Get-BrsCode (Get-BrsBody $src 'sub onPlaylistChange\(\)')
+        $compute = Get-BrsCode (Get-BrsBody $src 'sub computeResume\(\)')
+        $change.Length -gt 300 | Should Be $true      # positive controls: both bodies were found
+        $compute.Length -gt 200 | Should Be $true
+        $change | Should Not Match 'playRequest'
+        $compute | Should Not Match 'playRequest'
+    }
+
+    It 'MainScene toggles resumeCommand after showChannels( and only under m.launchLoad' {
+        $src = Get-Content -Raw $mainBrs
+        $status = Get-BrsCode (Get-BrsBody $src 'sub onPlaylistStatus\(\)')
+        $iShow = [regex]::Match($status, 'showChannels\(').Index
+        $iToggle = [regex]::Match($status, 'resumeCommand\s*=\s*not').Index
+        $iShow | Should BeGreaterThan 0
+        $iToggle | Should BeGreaterThan 0
+        ($iShow -lt $iToggle) | Should Be $true
+        $status | Should Match '(?s)if m\.launchLoad\s+m\.launchLoad = false\s+m\.channelsScreen\.resumeCommand = not'
+        ([regex]::Matches((Get-BrsCode $src), 'resumeCommand = not')).Count | Should Be 1
+        # every load started from Settings clears the flag first, before any of them starts
+        $act = Get-BrsCode (Get-BrsBody $src 'sub onSettingsAction\(\)')
+        $iClear = $act.IndexOf('m.launchLoad = false')
+        $iFirstLoad = $act.IndexOf('startPlaylistLoad(')
+        $iClear | Should BeGreaterThan 0
+        $iFirstLoad | Should BeGreaterThan 0
+        ($iClear -lt $iFirstLoad) | Should Be $true
+    }
+
+    It 'onResumeCommand gates the indexed entry on IsAdultGroup between the lookup and playRequest' {
+        $body = Get-BrsCode (Get-BrsBody (Get-Content -Raw $channelsBrs) 'sub onResumeCommand\(\)')
+        $body.Length -gt 300 | Should Be $true
+        $iLookup = [regex]::Match($body, '\.name\s*=\s*r\.name').Index
+        $iGate = [regex]::Match($body, 'IsAdultGroup\(\s*ch\.group\s*\)').Index
+        $iPlay = $body.IndexOf('m.top.playRequest')
+        $iLookup | Should BeGreaterThan 0
+        $iGate | Should BeGreaterThan 0
+        $iPlay | Should BeGreaterThan 0
+        ($iLookup -lt $iGate) | Should Be $true
+        ($iGate -lt $iPlay) | Should Be $true
+        ([regex]::Matches($body, 'playRequest')).Count | Should Be 1
+    }
+
+    It 'computes resume only when the adult count is above zero (fail closed)' {
+        $src = Get-Content -Raw $channelsBrs
+        $change = Get-BrsCode (Get-BrsBody $src 'sub onPlaylistChange\(\)')
+        $change | Should Match 'adultCount = PurgeAdultFromRecents\('
+        $change | Should Match '(?s)if adultCount < 1\s+ClearLastChannel\(\)\s.*?disabled: adult classifier matched 0.*?\r?\n\s*else\s+computeResume\(\)'
+        ([regex]::Matches($change, 'computeResume\(\)')).Count | Should Be 1
+    }
+
+    It 'the Settings row sits before Diagnostics, which is the last addItem' {
+        $src = Get-Content -Raw $settingsBrs
+        $build = Get-BrsCode (Get-BrsBody $src 'sub buildList\(\)')
+        $actions = @([regex]::Matches($build, 'addItem\(content,.*,\s*"([a-z]+)"\)') | ForEach-Object { $_.Groups[1].Value })
+        $actions[$actions.Count - 1] | Should Be 'diagnostics'
+        $iResume = $build.IndexOf('"resume")')
+        $iDiag = $build.IndexOf('"diagnostics")')
+        $iResume | Should BeGreaterThan 0
+        ($iResume -lt $iDiag) | Should Be $true
+        $src | Should Match 'Resume last channel: On'
+        $src | Should Match 'Resume last channel: Off'
+    }
+}
+
+Describe 'Recent grid lag (1.2.0)' {
+    It 'ChannelCard no longer reads the guide or observes epgReady' {
+        $src = Get-Content -Raw $cardBrs
+        $src.Length -gt 500 | Should Be $true          # positive control: the file was read
+        $src | Should Match 'm\.global\.theme'
+        $src | Should Not Match 'm\.global\.epg'
+        $src | Should Not Match 'EpgFind'
+        $src | Should Not Match 'epgReady'
+    }
+
+    It 'ChannelsScreen reads playlistResult once into m.res and times the build' {
+        $src = Get-BrsCode (Get-Content -Raw $channelsBrs)
+        ([regex]::Matches($src, 'm\.top\.playlistResult')).Count | Should Be 1
+        $src | Should Match 'm\.res = res'
+        $src | Should Match '\[GRID\] build idx='
+        # the guide is read once per build, not once per card
+        $build = Get-BrsBody $src 'function buildGridForCategory\(idx as integer\) as object'
+        ([regex]::Matches($build, 'm\.global\.epg')).Count | Should Be 1
+    }
+
+    It 'ChannelContent declares epgNow' {
+        (Get-Content -Raw (Join-Path $projectRoot 'components\ChannelContent.xml')) | Should Match '<field id="epgNow" type="string" />'
+    }
+}
+
+Describe 'Resume and grid refresh hardening (1.2.0 audit round)' {
+    It 'ChannelsScreen init attaches no global observer; onPlaylistChange attaches them once, guarded' {
+        $src = Get-Content -Raw $channelsBrs
+        $init = Get-BrsCode (Get-BrsBody $src 'sub init\(\)')
+        $init.Length -gt 500 | Should Be $true         # positive control: the body was found
+        $init | Should Not Match 'm\.global\.observeField'
+        $change = Get-BrsCode (Get-BrsBody $src 'sub onPlaylistChange\(\)')
+        $change | Should Match '(?s)if not m\.globalObserved\s+m\.globalObserved = true\s+m\.global\.observeField\("epgReady", "onEpgReady"\)\s+m\.global\.observeField\("nowSec", "onNowTick"\)'
+    }
+
+    It 'refreshGridEpg reads the guide once, outside the node loop, and prints its cost' {
+        $body = Get-BrsCode (Get-BrsBody (Get-Content -Raw $channelsBrs) 'sub refreshGridEpg\(key as string\)')
+        $body.Length -gt 200 | Should Be $true
+        ([regex]::Matches($body, 'm\.global\.epg')).Count | Should Be 1
+        $iRead = $body.IndexOf('m.global.epg')
+        $iLoop = $body.IndexOf('for i = 0')
+        $iRead | Should BeGreaterThan 0
+        $iLoop | Should BeGreaterThan 0
+        ($iRead -lt $iLoop) | Should Be $true
+        $body | Should Match '\[GRID\] epg refresh key='
+    }
+
+    It 'onEpgReady refreshes only the shown grid and marks the others stale' {
+        $body = Get-BrsCode (Get-BrsBody (Get-Content -Raw $channelsBrs) 'sub onEpgReady\(\)')
+        $body.Length -gt 150 | Should Be $true
+        $body | Should Not Match 'getChild\('
+        $body | Should Match 'm\.gridStamp\[key\]\s*=\s*0'
+        ([regex]::Matches($body, 'refreshGridEpg\(')).Count | Should Be 1
+    }
+
+    It 'a stale cached grid is refreshed when shown, and the tick works only while visible' {
+        $src = Get-Content -Raw $channelsBrs
+        $show = Get-BrsCode (Get-BrsBody $src 'sub updateGridForCategory\(idx as integer\)')
+        $show | Should Match 'if not isFreshStamp\(key\) then refreshGridEpg\(key\)'
+        $fresh = Get-BrsCode (Get-BrsBody $src 'function isFreshStamp\(key as string\) as boolean')
+        $fresh | Should Match '<=\s*300\b'
+        $tick = Get-BrsCode (Get-BrsBody $src 'sub onNowTick\(\)')
+        $iVis = [regex]::Match($tick, 'if not m\.top\.visible then return').Index
+        $iRef = $tick.IndexOf('refreshGridEpg(')
+        $tick | Should Match 'if not m\.top\.visible then return'
+        $iRef | Should BeGreaterThan 0
+        ($iVis -lt $iRef) | Should Be $true
+    }
+
+    It 'resume is computed only for the launch load: spent flag set in onResumeCommand, honoured by computeResume' {
+        $src = Get-Content -Raw $channelsBrs
+        $cmd = Get-BrsCode (Get-BrsBody $src 'sub onResumeCommand\(\)')
+        $cmd | Should Match 'm\.resumeSpent = true'
+        $cmd.IndexOf('m.resumeSpent = true') | Should BeLessThan $cmd.IndexOf('flushPendingGrid()')
+        $compute = Get-BrsCode (Get-BrsBody $src 'sub computeResume\(\)')
+        $compute | Should Match 'if m\.resumeSpent then return'
+    }
+
+    It 'computeResume refuses and clears when ANY channel of that name is in the adult group' {
+        $compute = Get-BrsCode (Get-BrsBody (Get-Content -Raw $channelsBrs) 'sub computeResume\(\)')
+        $compute | Should Match '(?s)for each c in m\.res\.channels\s+if c\.name = name and IsAdultGroup\(c\.group\)\s+ClearLastChannel\(\)\s+return'
+    }
+
+    It 'ClearLastChannel falls back to blanking the value when Delete or Flush fails' {
+        $body = Get-BrsCode (Get-BrsBody (Get-Content -Raw $storeBrs) 'sub ClearLastChannel\(\)')
+        $body.Length -gt 200 | Should Be $true
+        $iDel = $body.IndexOf('.Delete("lastChannel")')
+        $iBlank = $body.IndexOf('.Write("lastChannel", "")')
+        $iFail = $body.IndexOf('[RESUME] clear failed')
+        $iDel | Should BeGreaterThan 0
+        ($iDel -lt $iBlank) | Should Be $true
+        ($iBlank -lt $iFail) | Should Be $true
+    }
+
+    It 'm.byName is case-sensitive before it is filled' {
+        $change = Get-BrsCode (Get-BrsBody (Get-Content -Raw $channelsBrs) 'sub onPlaylistChange\(\)')
+        $iMode = $change.IndexOf('m.byName.SetModeCaseSensitive()')
+        $iFill = $change.IndexOf('m.byName[')
+        $iMode | Should BeGreaterThan 0
+        $iFill | Should BeGreaterThan 0
+        ($iMode -lt $iFill) | Should Be $true
+    }
+
+    It 'toggleResume re-asserts list focus and shows the info of the row it toggled' {
+        $src = Get-Content -Raw $settingsBrs
+        $body = Get-BrsCode (Get-BrsBody $src 'sub toggleResume\(\)')
+        $body.Length -gt 150 | Should Be $true
+        $iJump = $body.IndexOf('jumpToItem')
+        $iFocus = $body.IndexOf('m.settingsList.setFocus(true)')
+        $iInfo = $body.IndexOf('updateInfo()')
+        $iJump | Should BeGreaterThan 0
+        ($iJump -lt $iFocus) | Should Be $true
+        $body | Should Match 'm\.forceInfoRow = row'
+        ($iFocus -lt $iInfo) | Should Be $true
+        (Get-BrsCode (Get-BrsBody $src 'sub updateInfo\(\)')) | Should Match 'idx = m\.forceInfoRow'
     }
 }

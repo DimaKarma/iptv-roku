@@ -2,6 +2,7 @@
 <component name="SettingsScreen" extends="Group">
     <script type="text/brightscript" uri="pkg:/components/SettingsScreen.brs" />
     <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
+    <script type="text/brightscript" uri="pkg:/source/ChannelStore.brs" />
     <interface>
         <field id="info" type="assocarray" onChange="onInfoChange" />
         <!-- action carries WHICH action; actionCommand is the trigger that fires it.
@@ -33,7 +34,7 @@
                    color="0x86A6B1FF"
                    focusedColor="0xFFFFFFFF"
                    focusBitmapBlendColor="0xFF4D1FFF"
-                   numRows="6" />
+                   numRows="7" />
                    
         <Label id="infoLabel"
                translation="[960, 120]"

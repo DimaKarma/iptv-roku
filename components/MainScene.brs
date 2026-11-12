@@ -62,6 +62,10 @@ sub init()
     m.top.setFocus(true)
     
     m.playlistResultCache = invalid
+    ' True for the playlist load started at launch (and an error-screen retry of that
+    ' same failed load); false for every load started from Settings. Only a launch load
+    ' may start the resume playback.
+    m.launchLoad = false
     
     if m.global.epg = invalid then m.global.addField("epg", "assocarray", false)
     if m.global.epgReady = invalid then m.global.addField("epgReady", "boolean", false)
@@ -95,6 +99,7 @@ sub onConfigLoaded()
     end if
     
     if url <> ""
+        m.launchLoad = true
         startPlaylistLoad(url, false, false)
     else
         showOnboarding()
@@ -125,6 +130,10 @@ sub onPlaylistStatus()
         if res <> invalid
             m.playlistResultCache = res
             showChannels(res)
+            if m.launchLoad
+                m.launchLoad = false
+                m.channelsScreen.resumeCommand = not m.channelsScreen.resumeCommand
+            end if
             
             epgUrl = ""
             sec = CreateObject("roRegistrySection", "settings")
@@ -194,6 +203,7 @@ sub onOnboardingSave()
         sec = CreateObject("roRegistrySection", "settings")
         sec.Write("playlistUrl", url)
         sec.Flush()
+        m.launchLoad = true
         startPlaylistLoad(url, false, false)
     end if
 end sub
@@ -283,6 +293,8 @@ end sub
 
 sub onSettingsAction()
     action = m.settingsScreen.action
+    ' Whatever Settings asks for, it is never a launch load: no resume playback after it.
+    m.launchLoad = false
     if action = "refresh"
         startPlaylistLoad(m.currentUrl, true, false)
     else if action = "clearCache"

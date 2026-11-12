@@ -11,6 +11,7 @@ sub init()
     ' The Diagnostics screen is created on first use (never a static child, no probe code
     ' in any init) and then reused.
     m.diag = invalid
+    m.forceInfoRow = -1
     
     m.toastBg = m.top.findNode("toastBg")
     m.toastLabel = m.top.findNode("toastLabel")
@@ -66,10 +67,16 @@ sub buildList()
     addItem(content, "URL EPG", "epg")
     addItem(content, "Clear cache", "clearCache")
     addItem(content, "About", "about")
+    addItem(content, resumeRowTitle(), "resume")
     addItem(content, "Diagnostics", "diagnostics")
     
     m.settingsList.content = content
 end sub
+
+function resumeRowTitle() as string
+    if IsResumeEnabled() then return "Resume last channel: On"
+    return "Resume last channel: Off"
+end function
 
 sub addItem(parent as object, title as string, action as string)
     item = parent.createChild("ContentNode")
@@ -99,9 +106,13 @@ end function
 sub updateInfo()
     ' Both values are bumped by hand with each release and are bound to the manifest
     ' by a test (tests/BrightScript.Lint.Tests.ps1).
-    appVersion = "1.1.2"
-    buildDate = "2026-11-12"
+    appVersion = "1.2.0"
+    buildDate = "2026-11-13"
     idx = m.settingsList.itemFocused
+    if m.forceInfoRow <> invalid and m.forceInfoRow >= 0
+        idx = m.forceInfoRow
+        m.forceInfoRow = -1
+    end if
     info = m.top.info
     act = actionAt(idx)
     
@@ -122,6 +133,8 @@ sub updateInfo()
         end if
     else if act = "clearCache"
         text = "Delete cached playlist data and metadata."
+    else if act = "resume"
+        text = "Play the last watched channel when the app starts."
     else if act = "diagnostics"
         text = "Probes for the keyboard and for what this device allows." + chr(10) + "Results go to the debug console."
     else if act = "about"
@@ -191,11 +204,26 @@ sub onItemSelected()
         ' The deletion itself happens in PlaylistTask (clearCache), off the render thread.
         showToast("Cache cleared")
         sendAction("clearCache")
+    else if act = "resume"
+        toggleResume()
     else if act = "diagnostics"
         openDiagnostics()
     else if act = "about"
         ' Do nothing
     end if
+end sub
+
+' Flip the setting, then rebuild the list so the row shows the new state. Rebuilding
+' resets the cursor, so put it back on the same row.
+sub toggleResume()
+    row = m.settingsList.itemFocused
+    SetResumeEnabled(not IsResumeEnabled())
+    buildList()
+    m.settingsList.jumpToItem = row
+    m.settingsList.setFocus(true)
+    ' itemFocused may still hold the old value right after jumpToItem.
+    m.forceInfoRow = row
+    updateInfo()
 end sub
 
 sub showKeyboard(hint as string)

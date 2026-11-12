@@ -22,7 +22,6 @@ sub init()
     ' Fix anchor for scaling (center of 330x220)
     m.top.scaleRotateCenter = [165.0, 110.0]
     
-    m.global.observeField("epgReady", "onEpgReady")
     m.epgLabel.color = theme.colorTextDim
 end sub
 
@@ -67,22 +66,17 @@ sub onContentChange()
     updateEpgLabel()
 end sub
 
-sub onEpgReady()
-    updateEpgLabel()
-end sub
-
+' The programme line is a plain field of the content node (epgNow), filled when the grid
+' is built and refreshed when the guide arrives. The card never touches the guide itself:
+' reading it here copied the whole map per card per bind.
 sub updateEpgLabel()
     if m.top.itemContent = invalid
         m.epgLabel.text = ""
         return
     end if
-    
-    info = EpgFind(m.global.epg, m.top.itemContent.name, m.global.nowSec)
-    if info.now <> invalid
-        m.epgLabel.text = info.now.t
-    else
-        m.epgLabel.text = ""
-    end if
+    txt = m.top.itemContent.epgNow
+    if txt = invalid then txt = ""
+    m.epgLabel.text = txt
 end sub
 
 ' The focus ring is drawn by the GRID, not by this card.

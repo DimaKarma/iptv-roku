@@ -124,6 +124,9 @@ sub playIndex(idx as integer)
     m.recentPending = true
     if IsAdultGroup(channel.group)
         m.recentName = invalid
+        ' The only delete site of the stored resume channel in the player: playing an
+        ' adult-group channel at all removes it, and nothing derived from it is stored.
+        ClearLastChannel()
     else
         m.recentName = channel.name
     end if
@@ -226,6 +229,10 @@ end sub
 sub onRecentTimer()
     if m.recentName <> invalid
         PushRecent(m.recentName)
+        ' The only write site of the resume channel. The argument is m.recentName, the
+        ' name captured when THIS timer was armed, never the playlist entry at the
+        ' current index (a zap in the meantime must not store the channel zapped to).
+        SaveLastChannel(m.recentName)
         m.recentName = invalid
     end if
 end sub

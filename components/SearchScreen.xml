@@ -4,6 +4,7 @@
     <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
     <script type="text/brightscript" uri="pkg:/source/ChannelStore.brs" />
     <script type="text/brightscript" uri="pkg:/source/Translit.brs" />
+    <script type="text/brightscript" uri="pkg:/source/Epg.brs" />
     <interface>
         <field id="channels" type="array" onChange="onChannelsChange" />
         <field id="playRequest" type="assocarray" />

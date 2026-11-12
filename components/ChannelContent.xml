@@ -7,5 +7,8 @@
         <field id="logo" type="string" />
         <field id="compatible" type="boolean" />
         <field id="favorite" type="boolean" />
+        <!-- Programme on now, computed when the grid is BUILT (one guide read per build) and
+             refreshed on epgReady. ChannelCard only displays it. Empty when there is no guide. -->
+        <field id="epgNow" type="string" />
     </interface>
 </component>

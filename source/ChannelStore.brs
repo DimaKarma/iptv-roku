@@ -209,16 +209,84 @@ function IsAdultGroup(group as dynamic) as boolean
     return group = "Взрослые"
 end function
 
-' Remove any already-stored Recent entries whose channel is in the adult group.
-sub PurgeAdultFromRecents(channels as object)
-    if channels = invalid then return
+' Resume last channel. The key holds the PLAIN name of the last non-adult channel that
+' played for 10 s, or is absent. It is written from exactly one place (the player's
+' recent timer) and removed from the player's adult branch and from the purge below.
+' Console lines never carry a channel name.
+sub SaveLastChannel(name as string)
+    if name = "" then return
+    sec = getRegistrySection()
+    if sec = invalid
+        print "[RESUME] save failed"
+        return
+    end if
+    wrote = sec.Write("lastChannel", name)
+    flushed = sec.Flush()
+    if wrote <> true or flushed <> true then print "[RESUME] save failed"
+end sub
+
+' No registry call at all when the key is already absent.
+sub ClearLastChannel()
+    sec = getRegistrySection()
+    if sec = invalid then return
+    if not sec.Exists("lastChannel") then return
+    removed = sec.Delete("lastChannel")
+    flushed = sec.Flush()
+    if removed = true and flushed = true then return
+    ' Delete or Flush failed: blank the value instead (LoadLastChannel treats "" as none).
+    wrote = sec.Write("lastChannel", "")
+    flushed2 = sec.Flush()
+    if wrote <> true or flushed2 <> true then print "[RESUME] clear failed"
+end sub
+
+function LoadLastChannel() as string
+    sec = getRegistrySection()
+    if sec = invalid then return ""
+    if not sec.Exists("lastChannel") then return ""
+    val = sec.Read("lastChannel")
+    if val = invalid then return ""
+    return val
+end function
+
+' Setting `Resume last channel`: absent or "1" = On, "0" = Off.
+function IsResumeEnabled() as boolean
+    sec = CreateObject("roRegistrySection", "settings")
+    if sec = invalid then return true
+    if not sec.Exists("resumeLast") then return true
+    return sec.Read("resumeLast") <> "0"
+end function
+
+sub SetResumeEnabled(enabled as boolean)
+    sec = CreateObject("roRegistrySection", "settings")
+    if sec = invalid then return
+    if enabled
+        sec.Write("resumeLast", "1")
+    else
+        sec.Write("resumeLast", "0")
+    end if
+    sec.Flush()
+end sub
+
+' Remove any already-stored Recent entries whose channel is in the adult group, and the
+' stored last channel when its name is in that set now (the provider may have moved it).
+' Returns how many channels of the adult group the playlist holds: the caller treats 0 as
+' "the classifier no longer matches anything" and disables resume.
+function PurgeAdultFromRecents(channels as object) as integer
+    if channels = invalid then return 0
     adult = {}
+    adultCount = 0
     for each ch in channels
-        if ch.name <> invalid and IsAdultGroup(ch.group) then adult[ch.name] = true
+        if IsAdultGroup(ch.group)
+            adultCount = adultCount + 1
+            if ch.name <> invalid then adult[ch.name] = true
+        end if
     end for
 
+    last = LoadLastChannel()
+    if last <> "" and adult[last] <> invalid then ClearLastChannel()
+
     recents = LoadRecents()
-    if recents = invalid or recents.Count() = 0 then return
+    if recents = invalid or recents.Count() = 0 then return adultCount
 
     result = []
     changed = false
@@ -231,4 +299,5 @@ sub PurgeAdultFromRecents(channels as object)
     end for
 
     if changed then SaveRecents(result)
-end sub
+    return adultCount
+end function

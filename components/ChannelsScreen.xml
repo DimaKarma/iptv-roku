@@ -3,6 +3,7 @@
     <script type="text/brightscript" uri="pkg:/components/ChannelsScreen.brs" />
     <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
     <script type="text/brightscript" uri="pkg:/source/ChannelStore.brs" />
+    <script type="text/brightscript" uri="pkg:/source/Epg.brs" />
     <interface>
         <field id="playlistResult" type="assocarray" onChange="onPlaylistChange" />
         <field id="playRequest" type="assocarray" />
@@ -12,6 +13,9 @@
         <!-- notice carries the text, noticeCommand triggers it (repeat-safe). -->
         <field id="notice" type="string" />
         <field id="noticeCommand" type="boolean" />
+        <!-- Toggled once by MainScene after the launch load is on screen; the screen then
+             starts the resume playback itself, if one was computed (repeat-safe). -->
+        <field id="resumeCommand" type="boolean" />
     </interface>
     
     <children>

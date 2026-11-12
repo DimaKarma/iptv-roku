@@ -16,6 +16,7 @@ sub init()
     m.toastTimer.observeField("fire", "hideToast")
     m.top.observeField("restoreFocus", "onRestoreFocus")
     m.top.observeField("noticeCommand", "onNotice")
+    m.top.observeField("resumeCommand", "onResumeCommand")
     
     theme = getTheme()
     if theme <> invalid
@@ -37,6 +38,23 @@ sub init()
     m.gridCache = {}
     m.channelsCache = {}
     m.favSet = {}
+    ' The playlist result, read ONCE per load: reading m.top.playlistResult copies all
+    ' ~1500 channels every time. byName maps a channel name to its first entry.
+    m.res = invalid
+    m.byName = {}
+    ' {cat, name} computed by onPlaylistChange, consumed by onResumeCommand. Never set
+    ' for an adult-group channel.
+    m.resume = invalid
+    m.resumeLogged = false
+    ' True once the launch resume has been offered (played or not): later playlist
+    ' results never compute one.
+    m.resumeSpent = false
+    ' Global observers are attached lazily in onPlaylistChange: this screen is a static
+    ' child of MainScene, its init runs BEFORE MainScene.init creates the fields.
+    m.globalObserved = false
+    ' Seconds (m.global.nowSec) at which each cached grid had its programme lines built
+    ' or refreshed; 0 = stale.
+    m.gridStamp = {}
     m.pendingIdx = -1
     m.currentCategoryIdx = -1
     m.gridDebounceTimer = m.top.findNode("gridDebounceTimer")
@@ -64,6 +82,7 @@ end sub
 sub clearGridCache()
     m.gridCache = {}
     m.channelsCache = {}
+    m.gridStamp = {}
 end sub
 
 ' Refresh favorite state without clearing the whole cache.
@@ -90,7 +109,7 @@ end sub
 function headerForCategory(idx as integer) as string
     if idx = 1 then return "CHANNELS — Favorites"
     if idx = 2 then return "CHANNELS — Recent"
-    res = m.top.playlistResult
+    res = m.res
     catIndex = idx - 3
     if res <> invalid and res.categories <> invalid and catIndex >= 0 and catIndex < res.categories.Count()
         cat = res.categories[catIndex]
@@ -106,31 +125,32 @@ function emptyTextForCategory(idx as integer) as string
 end function
 
 function buildGridForCategory(idx as integer) as object
-    res = m.top.playlistResult
+    res = m.res
     gridContent = CreateObject("roSGNode", "ContentNode")
     channels = []
     if res = invalid then return { content: gridContent, channels: channels }
+    ' One guide read per build (an assocarray field read copies the whole map).
+    epg = m.global.epg
+    nowSec = m.global.nowSec
 
     if idx = 1 ' Favorites
         if res.channels <> invalid
             for each ch in res.channels
                 if m.favSet[ch.name] <> invalid
-                    addChannel(gridContent, ch, true)
+                    addChannel(gridContent, ch, true, epg, nowSec)
                     channels.Push(ch)
                 end if
             end for
         end if
     else if idx = 2 ' Recents
         recents = LoadRecents()
-        if recents <> invalid and res.channels <> invalid
+        if recents <> invalid
             for each r in recents
-                for each ch in res.channels
-                    if ch.name = r
-                        addChannel(gridContent, ch, (m.favSet[ch.name] <> invalid))
-                        channels.Push(ch)
-                        exit for
-                    end if
-                end for
+                ch = m.byName[r]
+                if ch <> invalid
+                    addChannel(gridContent, ch, (m.favSet[ch.name] <> invalid), epg, nowSec)
+                    channels.Push(ch)
+                end if
             end for
         end if
     else ' Regular category ("All" or others)
@@ -140,7 +160,7 @@ function buildGridForCategory(idx as integer) as object
             if res.channels <> invalid
                 for each ch in res.channels
                     if cat.title = "All" or ch.group = cat.title
-                        addChannel(gridContent, ch, (m.favSet[ch.name] <> invalid))
+                        addChannel(gridContent, ch, (m.favSet[ch.name] <> invalid), epg, nowSec)
                         channels.Push(ch)
                     end if
                 end for
@@ -153,12 +173,28 @@ end function
 sub onPlaylistChange()
     res = m.top.playlistResult
     if res = invalid return
+    m.res = res
+
+    if not m.globalObserved
+        m.globalObserved = true
+        m.global.observeField("epgReady", "onEpgReady")
+        m.global.observeField("nowSec", "onNowTick")
+    end if
+
+    m.byName = {}
+    ' Case-sensitive, like the name comparisons it replaces; before the first insert.
+    m.byName.SetModeCaseSensitive()
+    if res.channels <> invalid
+        for each ch in res.channels
+            if ch.name <> invalid and not m.byName.DoesExist(ch.name) then m.byName[ch.name] = ch
+        end for
+    end if
     
     ' Before migration and the purge, so everything downstream sees the restored
     ' data on the run that seeds it.
     RestoreStoreIfEmpty()
     MigrateStoreToNames(res.channels)
-    PurgeAdultFromRecents(res.channels)
+    adultCount = PurgeAdultFromRecents(res.channels)
     ' After migration and purge, so what is printed is exactly what is stored.
     ' deploy.ps1 captures these lines over port 8085 before every sideload.
     DumpStore()
@@ -166,16 +202,150 @@ sub onPlaylistChange()
     buildCategories()
     clearGridCache()
     rebuildFavSet()
+
+    ' Resume is only COMPUTED here, never started: MainScene toggles resumeCommand after
+    ' the screen is shown, and the playback request leaves from onResumeCommand.
+    ' Fail closed: with no channel in the adult group the classifier has stopped matching
+    ' (a renamed group), so every adult channel would look resumable. Disable instead.
+    m.resume = invalid
+    m.resumeLogged = false
+    if adultCount < 1
+        ClearLastChannel()
+        m.resumeLogged = true
+        print "[RESUME] disabled: adult classifier matched 0"
+    else
+        computeResume()
+    end if
     
     m.categoryList.setFocus(true)
-    ' Default to "Favorites" which is index 1
+    ' Default to "Favorites" (index 1); to the list holding the resume channel when set.
     if m.categoryList.content <> invalid and m.categoryList.content.getChildCount() > 1
-        m.categoryList.jumpToItem = 1
+        if m.resume <> invalid
+            m.categoryList.jumpToItem = m.resume.cat
+        else
+            m.categoryList.jumpToItem = 1
+        end if
     end if
 end sub
 
+' Sets m.resume = {cat, name} or leaves it invalid. Favorites (1) when the channel is a
+' favourite, else Recent (2), else nothing. The adult purge has already removed a stored
+' name that belongs to the adult group; the entry is checked again here regardless.
+sub computeResume()
+    m.resume = invalid
+    if m.resumeSpent then return
+    if not IsResumeEnabled() then return
+    name = LoadLastChannel()
+    if name = "" then return
+    ' Refuse, and forget the name, when ANY channel of that name is in the adult group;
+    ' this does not rely on the purge having succeeded.
+    if m.res <> invalid and m.res.channels <> invalid
+        for each c in m.res.channels
+            if c.name = name and IsAdultGroup(c.group)
+                ClearLastChannel()
+                return
+            end if
+        end for
+    end if
+    ch = m.byName[name]
+    if ch = invalid then return
+    if ch.compatible <> true or IsAdultGroup(ch.group) then return
+
+    cat = 0
+    if m.favSet[name] <> invalid
+        cat = 1
+    else
+        recents = LoadRecents()
+        if recents <> invalid
+            for each r in recents
+                if r = name
+                    cat = 2
+                    exit for
+                end if
+            end for
+        end if
+    end if
+    if cat = 0 then return
+    m.resume = { cat: cat, name: name }
+end sub
+
+' Launch-time resume. MainScene toggles resumeCommand once, right after the first
+' showChannels of the launch load. It consumes m.resume, so one computed result starts
+' at most one playback. Any failure leaves the screen exactly as a normal launch.
+sub onResumeCommand()
+    r = m.resume
+    m.resume = invalid
+    m.resumeSpent = true
+    if r = invalid
+        if not m.resumeLogged then print "[RESUME] none"
+        m.resumeLogged = true
+        return
+    end if
+    flushPendingGrid()
+    updateGridForCategory(r.cat)
+    idx = -1
+    for i = 0 to m.currentChannels.Count() - 1
+        if m.currentChannels[i].name = r.name
+            idx = i
+            exit for
+        end if
+    end for
+    ch = invalid
+    if idx >= 0 then ch = m.currentChannels[idx]
+    ' Final gate, on the entry that is actually handed to the player.
+    if ch = invalid or ch.name <> r.name or ch.compatible <> true or IsAdultGroup(ch.group)
+        print "[RESUME] none"
+        return
+    end if
+    m.gridFocusMemory[r.cat.ToStr()] = idx
+    m.channelGrid.jumpToItem = idx
+    print "[RESUME] play cat=" + r.cat.ToStr() + " idx=" + idx.ToStr()
+    m.top.playRequest = { channels: m.currentChannels, index: idx }
+end sub
+
+' The guide arrived or was refreshed: update the shown grid only and mark every other
+' cached grid stale, so it refreshes when it is next shown (no walk over cached nodes).
+sub onEpgReady()
+    shown = m.currentCategoryIdx.ToStr()
+    for each key in m.gridCache
+        if key <> shown then m.gridStamp[key] = 0
+    end for
+    if m.gridCache.DoesExist(shown) then refreshGridEpg(shown)
+end sub
+
+' Ticks every 30 s (MainScene.onNowTick bumps nowSec). Only the grid on screen is
+' looked at, and only while this screen is visible.
+sub onNowTick()
+    if not m.top.visible then return
+    key = m.currentCategoryIdx.ToStr()
+    if not m.gridCache.DoesExist(key) then return
+    if not isFreshStamp(key) then refreshGridEpg(key)
+end sub
+
+function isFreshStamp(key as string) as boolean
+    stamp = m.gridStamp[key]
+    if stamp = invalid or stamp = 0 then return false
+    return (m.global.nowSec - stamp) <= 300
+end function
+
+' Re-compute epgNow of ONE cached grid. One guide read per refresh, never per node.
+sub refreshGridEpg(key as string)
+    content = m.gridCache[key]
+    if content = invalid then return
+    t0 = Uptime(0)
+    epg = m.global.epg
+    nowSec = m.global.nowSec
+    n = content.getChildCount()
+    for i = 0 to n - 1
+        child = content.getChild(i)
+        child.epgNow = EpgNowText(epg, child.name, nowSec)
+    end for
+    m.gridStamp[key] = nowSec
+    print "[GRID] epg refresh key=" + key + " items=" + n.ToStr() + " ms=" + Int((Uptime(0) - t0) * 1000).ToStr()
+end sub
+
 sub buildCategories()
-    res = m.top.playlistResult
+    res = m.res
     if res = invalid return
     
     favs = LoadFavorites()
@@ -273,10 +443,16 @@ sub updateGridForCategory(idx as integer)
 
     key = idx.ToStr()
     if not m.gridCache.DoesExist(key)
+        t0 = Uptime(0)
         built = buildGridForCategory(idx)
         m.gridCache[key] = built.content
         m.channelsCache[key] = built.channels
+        m.gridStamp[key] = m.global.nowSec
+        print "[GRID] build idx=" + idx.ToStr() + " items=" + built.channels.Count().ToStr() + " ms=" + Int((Uptime(0) - t0) * 1000).ToStr()
     end if
+
+    ' A cached grid older than 5 minutes (or marked stale) gets fresh programme lines.
+    if not isFreshStamp(key) then refreshGridEpg(key)
 
     m.channelGrid.content = m.gridCache[key]
     m.currentChannels = m.channelsCache[key]
@@ -295,10 +471,11 @@ sub updateGridForCategory(idx as integer)
     end if
 end sub
 
-sub addChannel(parent as object, ch as object, isFav as boolean)
+sub addChannel(parent as object, ch as object, isFav as boolean, epg as dynamic, nowSec as dynamic)
     item = parent.createChild("ChannelContent")
     
     item.name = ch.name
+    item.epgNow = EpgNowText(epg, ch.name, nowSec)
     item.url = ch.url
     item.group = ch.group
     item.logo = ch.logo

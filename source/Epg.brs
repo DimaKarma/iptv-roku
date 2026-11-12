@@ -20,6 +20,16 @@ function EpgFind(epgMap as object, name as string, nowSec as dynamic) as object
     return res
 end function
 
+' Title of the programme on now, or "" (no guide, no entry, nothing on). The caller reads
+' m.global.epg ONCE per batch and passes it in: an assocarray field read copies the whole
+' map, so reading it per card is what made the Recent grid slow.
+function EpgNowText(epgMap as dynamic, name as string, nowSec as dynamic) as string
+    if epgMap = invalid then return ""
+    info = EpgFind(epgMap, name, nowSec)
+    if info.now <> invalid and info.now.t <> invalid then return info.now.t
+    return ""
+end function
+
 ' Unix UTC epoch -> "HH:MM" in the TV's local time.
 function EpgFmtHM(epoch as integer) as string
     dt = CreateObject("roDateTime")
