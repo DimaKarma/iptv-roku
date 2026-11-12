@@ -13,10 +13,19 @@ Roku Channel Store.
   streams flagged.
 - **Favorites & Recents** — stored by channel name (survives provider domain/token changes);
   toggle with `*` or long-press OK.
-- **Player** — HLS video with an info overlay, channel zap (▲/▼), a side zapper panel, and
-  an error dialog with retry / next / favorite / back.
-- **Search / Settings / Onboarding** — on-screen keyboard search, editable playlist & EPG
-  URLs, cache reset.
+- **Player** — HLS video with an info overlay, channel zap (▲/▼), a side zapper panel
+  (◀), **previous channel** on the Replay button, and an error dialog with retry / next /
+  back. A stream that stalls is caught by a watchdog instead of spinning forever.
+- **Resume** — the last channel watched for 10 seconds starts again at the next launch
+  (Settings: `Resume last channel: On/Off`).
+- **Search** — the app draws its own on-screen keyboard (Latin, Cyrillic and digits), with
+  live results beside it. Matching is transliteration-aware: a query typed in either
+  alphabet finds channels named in either.
+- **Adult category** — channels of the provider's adult group are never added to Recent,
+  never resumed at launch, never reached by the Replay button, and are skipped when
+  flipping with ▲/▼ from an ordinary channel. They open only by an explicit choice.
+- **Settings / Onboarding** — editable playlist & EPG URLs, reload, cache reset, a Diagnostics
+  screen, and an About screen with the version and build date.
 - **EPG** — compact "now/next" guide generated off-device (see [`epg/`](epg/)) and shown on
   cards and in the player overlay.
 
