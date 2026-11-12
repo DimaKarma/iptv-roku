@@ -261,3 +261,39 @@ Describe 'Read-RokuConsoleUntilQuiet' {
         }
     }
 }
+
+Describe 'Test-RestoreSeedKept' {
+    BeforeEach { . $storeTools }
+    It 'is true only for the string kept' {
+        (Test-RestoreSeedKept 'kept') | Should Be $true
+    }
+    It 'is false for the boolean true (the old -eq comparison said true)' {
+        (Test-RestoreSeedKept $true) | Should Be $false
+    }
+    It 'is false for false and for null' {
+        (Test-RestoreSeedKept $false) | Should Be $false
+        (Test-RestoreSeedKept $null) | Should Be $false
+    }
+}
+
+Describe 'Invoke-RokuLaunchWithRetry' {
+    BeforeEach { . $storeTools; $script:calls = 0 }
+    It 'succeeds on the third attempt: 3 calls, returns true' {
+        $r = Invoke-RokuLaunchWithRetry -Attempts 4 -DelayMs 0 -Action {
+            $script:calls++
+            if ($script:calls -lt 3) { throw 'no' }
+        }
+        $r | Should Be $true
+        $script:calls | Should Be 3
+    }
+    It 'always fails: 4 calls, returns false' {
+        $r = Invoke-RokuLaunchWithRetry -Attempts 4 -DelayMs 0 -Action { $script:calls++; throw 'no' }
+        $r | Should Be $false
+        $script:calls | Should Be 4
+    }
+    It 'first success: 1 call, returns true' {
+        $r = Invoke-RokuLaunchWithRetry -Attempts 4 -DelayMs 0 -Action { $script:calls++ }
+        $r | Should Be $true
+        $script:calls | Should Be 1
+    }
+}

@@ -62,3 +62,30 @@ Describe 'Registry seed contract' {
         $screen | Should Match '(?s)RestoreStoreIfEmpty\(\)\s+MigrateStoreToNames'
     }
 }
+
+Describe 'About version and build date' {
+    It 'binds the full manifest version major.minor.build to the About appVersion' {
+        $manifest = Get-Content -Raw (Join-Path $projectRoot 'manifest')
+        $major = [regex]::Match($manifest, '(?m)^major_version=(\d+)').Groups[1].Value
+        $minor = [regex]::Match($manifest, '(?m)^minor_version=(\d+)').Groups[1].Value
+        $build = [regex]::Match($manifest, '(?m)^build_version=(\d+)').Groups[1].Value
+        # Positive control: the manifest really was read.
+        $major | Should Not BeNullOrEmpty
+        $minor | Should Not BeNullOrEmpty
+        $build | Should Not BeNullOrEmpty
+
+        $about = Get-Content -Raw (Join-Path $projectRoot 'components\SettingsScreen.brs')
+        $shown = [regex]::Match($about, '(?m)^\s*appVersion = "([^"]*)"').Groups[1].Value
+        $shown | Should Not BeNullOrEmpty
+        $shown | Should Be "$major.$minor.$build"
+        # The About text must actually use the constant, not a second literal.
+        $about | Should Match 'text = "IPTV Player v" \+ appVersion'
+    }
+
+    It 'shows a build date in the form YYYY-MM-DD in About' {
+        $about = Get-Content -Raw (Join-Path $projectRoot 'components\SettingsScreen.brs')
+        $date = [regex]::Match($about, '(?m)^\s*buildDate = "([^"]*)"').Groups[1].Value
+        $date | Should Match '^\d{4}-\d{2}-\d{2}$'
+        $about | Should Match 'text = text \+ "Build " \+ buildDate'
+    }
+}

@@ -180,13 +180,13 @@ Describe 'Player timers (W1-7, W1-8) and focus order (W1-6)' {
 }
 
 Describe 'Version 1.1 (manifest and About agree)' {
-    It 'manifest says 1.1.0 and the About literal says v1.1' {
+    It 'manifest says 1.1.1 and the About version starts with 1.1' {
         $manifest = Get-Content -Raw (Join-Path $projectRoot 'manifest')
         [regex]::Match($manifest, 'major_version=(\d+)').Groups[1].Value | Should Be '1'
         [regex]::Match($manifest, 'minor_version=(\d+)').Groups[1].Value | Should Be '1'
-        [regex]::Match($manifest, 'build_version=(\d+)').Groups[1].Value | Should Be '0'
+        [regex]::Match($manifest, 'build_version=(\d+)').Groups[1].Value | Should Be '1'
         $about = Get-Content -Raw $settingsBrs
-        [regex]::Match($about, 'IPTV Player v(\d+\.\d+)').Groups[1].Value | Should Be '1.1'
+        [regex]::Match($about, 'appVersion = "(\d+\.\d+)\.\d+"').Groups[1].Value | Should Be '1.1'
     }
 }
 

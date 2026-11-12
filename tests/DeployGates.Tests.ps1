@@ -51,7 +51,7 @@ Describe 'Deploy gates contract' {
         $minor | Should Not BeNullOrEmpty
 
         $about = Get-Content -Raw (Join-Path $projectRoot 'components\SettingsScreen.brs')
-        $shown = [regex]::Match($about, 'IPTV Player v(\d+\.\d+)').Groups[1].Value
+        $shown = [regex]::Match($about, 'appVersion = "(\d+\.\d+)\.\d+"').Groups[1].Value
         $shown | Should Not BeNullOrEmpty
         $shown | Should Be "$major.$minor"
     }

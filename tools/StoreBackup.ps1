@@ -124,6 +124,27 @@ function Get-RokuStartMarkerCount {
 }
 
 
+# Runs $Action (it must THROW on failure) up to $Attempts times, $DelayMs apart, and stops at
+# the first success. Returns $true on success and $false when every attempt failed. One line
+# is printed per failed attempt. Kept free of any network call so it can be unit-tested.
+function Invoke-RokuLaunchWithRetry {
+    param(
+        [Parameter(Mandatory = $true)] [scriptblock] $Action,
+        [int] $Attempts = 4,
+        [int] $DelayMs = 3000
+    )
+    for ($n = 1; $n -le $Attempts; $n++) {
+        try {
+            & $Action | Out-Null
+            return $true
+        } catch {
+            Write-Host "  (relaunch attempt $n failed; retrying)"
+            if ($n -lt $Attempts -and $DelayMs -gt 0) { Start-Sleep -Milliseconds $DelayMs }
+        }
+    }
+    return $false
+}
+
 function Save-RokuStore {
     [CmdletBinding()]
     param(
@@ -179,7 +200,7 @@ function Save-RokuStore {
                 try {
                     Invoke-WebRequest -Uri "http://${host_}:8060/keypress/Home" -Method POST `
                         -TimeoutSec 5 -UseBasicParsing | Out-Null
-                    Start-Sleep -Milliseconds 1500
+                    Start-Sleep -Milliseconds 3000
                 } catch {
                     Write-Host "  (Home keypress failed; launching anyway)"
                 }
@@ -188,10 +209,13 @@ function Save-RokuStore {
             Write-Host "  (could not read active-app; launching anyway)"
         }
 
-        try {
+        # The TV can still be leaving the app when the first request arrives, so the launch
+        # is tried up to 4 times, 3 s apart.
+        $launched = Invoke-RokuLaunchWithRetry -Attempts 4 -DelayMs 3000 -Action {
             Invoke-WebRequest -Uri "http://${host_}:8060/launch/dev" -Method POST `
                 -TimeoutSec 10 -UseBasicParsing | Out-Null
-        } catch {
+        }
+        if (-not $launched) {
             Write-Host "  (relaunch request failed; reading the console anyway)"
         }
 
@@ -284,6 +308,14 @@ function Save-RokuStore {
     }
 }
 
+
+# True only for the STRING 'kept'. Update-RestoreSeed returns $true or 'kept', and in
+# PowerShell `$true -eq 'kept'` is TRUE (the string is converted to bool), so a bare -eq
+# cannot tell the two outcomes apart.
+function Test-RestoreSeedKept {
+    param($Outcome)
+    return (($Outcome -is [string]) -and ($Outcome -eq 'kept'))
+}
 
 # Rewrite the in-package restore seed from a freshly captured store.
 #

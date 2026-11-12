@@ -97,6 +97,10 @@ function actionAt(idx as integer) as string
 end function
 
 sub updateInfo()
+    ' Both values are bumped by hand with each release and are bound to the manifest
+    ' by a test (tests/BrightScript.Lint.Tests.ps1).
+    appVersion = "1.1.1"
+    buildDate = "2026-11-12"
     idx = m.settingsList.itemFocused
     info = m.top.info
     act = actionAt(idx)
@@ -125,7 +129,8 @@ sub updateInfo()
         ' roAppInfo would read it at runtime, but nothing in this project uses that
         ' object yet and rule 20 shows some CreateObject types fault on the render
         ' thread - which a Settings screen is. Not worth an install to find out.
-        text = "IPTV Player v1.1" + chr(10)
+        text = "IPTV Player v" + appVersion + chr(10)
+        text = text + "Build " + buildDate + chr(10)
         text = text + "Made for people. Completely free. Install and watch." + chr(10) + chr(10)
         if info <> invalid
             if info.channelCount <> invalid then text = text + "Channels: " + info.channelCount.ToStr() + chr(10)

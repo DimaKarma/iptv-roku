@@ -137,7 +137,7 @@ if ($SkipStoreBackup) {
         $storePath = Save-RokuStore -RokuIp $RokuIp -OutDir (Join-Path $PSScriptRoot 'backups')
         $seedOutcome = Update-RestoreSeed -StorePath $storePath -SeedPath (Join-Path $PSScriptRoot 'source\restore.json') `
             -BackupDir (Join-Path $PSScriptRoot 'backups')
-        if ($seedOutcome -eq 'kept') {
+        if (Test-RestoreSeedKept $seedOutcome) {
             Write-Host "  (the package will carry the PREVIOUS seed; see the notice above)"
         }
     } catch {
