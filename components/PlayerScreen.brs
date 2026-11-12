@@ -434,6 +434,11 @@ end sub
 
 sub onOkLongPress()
     m.okLongFired = true
+    ' The player must not act while it is not the active screen. The error dialog's "Back" row
+    ' calls exitPlayer() on the OK press, and that same press can still reach onKeyEvent and arm
+    ' this timer; its release goes to ChannelsScreen, so the timer fires on a dead player and
+    ' would silently favourite the dead channel.
+    if m.active <> true or m.errorDialog.visible or m.zapperPanel.visible then return
     if m.currentIndex < 0 or m.top.playlist = invalid then return
     ch = m.top.playlist[m.currentIndex]
     if ch = invalid then return
@@ -604,6 +609,8 @@ function onKeyEvent(key as string, press as boolean) as boolean
     else
         if key = "OK"
             if press
+                ' Never arm the long-press timer once exitPlayer() has run (m.active = false).
+                if m.active <> true then return true
                 m.okLongFired = false
                 m.okArmed = true
                 m.okTimer.control = "start"

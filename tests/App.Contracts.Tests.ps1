@@ -179,12 +179,45 @@ Describe 'Player timers (W1-7, W1-8) and focus order (W1-6)' {
     }
 }
 
+Describe 'Player inactive guard (error dialog Back must not favourite the dead channel)' {
+    It 'onOkLongPress returns before ToggleFavorite unless the player is active and no overlay is open' {
+        $src = Get-Content -Raw $playerBrs
+        $body = [regex]::Match($src, '(?s)sub onOkLongPress\(\).*?\r?\nend sub').Value
+        $body | Should Not BeNullOrEmpty
+        $iGuard = $body.IndexOf('if m.active <> true or m.errorDialog.visible or m.zapperPanel.visible then return')
+        $iToggle = $body.IndexOf('ToggleFavorite(')
+        $iGuard | Should BeGreaterThan 0
+        $iToggle | Should BeGreaterThan 0
+        ($iGuard -lt $iToggle) | Should Be $true
+    }
+
+    It 'onKeyEvent does not arm okTimer on an OK press while the player is not active' {
+        $src = Get-Content -Raw $playerBrs
+        $iGuard = $src.IndexOf('if m.active <> true then return true')
+        $iArm = $src.IndexOf('m.okArmed = true')
+        $iGuard | Should BeGreaterThan 0
+        $iArm | Should BeGreaterThan 0
+        ($iGuard -lt $iArm) | Should Be $true
+        # the guard sits inside onKeyEvent, not in some earlier sub
+        $iKey = $src.IndexOf('function onKeyEvent(')
+        ($iKey -lt $iGuard) | Should Be $true
+    }
+
+    It 'm.active is set true in playIndex (retry and zap go through it) and false in exitPlayer' {
+        $src = Get-Content -Raw $playerBrs
+        $play = [regex]::Match($src, '(?s)sub playIndex\(idx as integer\).*?\r?\nend sub').Value
+        $exit = [regex]::Match($src, '(?s)sub exitPlayer\(\).*?\r?\nend sub').Value
+        $play | Should Match 'm\.active = true'
+        $exit | Should Match 'm\.active = false'
+    }
+}
+
 Describe 'Version 1.1 (manifest and About agree)' {
-    It 'manifest says 1.1.1 and the About version starts with 1.1' {
+    It 'manifest says 1.1.2 and the About version starts with 1.1' {
         $manifest = Get-Content -Raw (Join-Path $projectRoot 'manifest')
         [regex]::Match($manifest, 'major_version=(\d+)').Groups[1].Value | Should Be '1'
         [regex]::Match($manifest, 'minor_version=(\d+)').Groups[1].Value | Should Be '1'
-        [regex]::Match($manifest, 'build_version=(\d+)').Groups[1].Value | Should Be '1'
+        [regex]::Match($manifest, 'build_version=(\d+)').Groups[1].Value | Should Be '2'
         $about = Get-Content -Raw $settingsBrs
         [regex]::Match($about, 'appVersion = "(\d+\.\d+)\.\d+"').Groups[1].Value | Should Be '1.1'
     }
