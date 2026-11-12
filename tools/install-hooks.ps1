@@ -28,10 +28,39 @@ param(
     [switch]$Uninstall,
     # Test seam: install into another working tree. Default is the repository this
     # script lives in.
-    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$RepoRoot
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Default for -RepoRoot: the repository this script lives in. It is resolved HERE and not
+# as a param() default because `(Split-Path -Parent $PSScriptRoot)` there failed under
+# Windows PowerShell 5.1 with `-File` (empty $PSScriptRoot while the default is evaluated:
+# "Cannot bind argument to parameter 'Path' because it is an empty string"). Try the
+# script's own location by every route; never fall back to the current directory.
+if (-not $RepoRoot) {
+    $scriptPath = $null
+    if ($PSScriptRoot) {
+        $scriptPath = Join-Path $PSScriptRoot 'install-hooks.ps1'
+    } elseif ($PSCommandPath) {
+        $scriptPath = $PSCommandPath
+    } elseif ($MyInvocation.MyCommand.Path) {
+        $scriptPath = $MyInvocation.MyCommand.Path
+    } elseif ($MyInvocation.MyCommand.Definition -and (Test-Path -LiteralPath $MyInvocation.MyCommand.Definition -PathType Leaf)) {
+        $scriptPath = $MyInvocation.MyCommand.Definition
+    }
+    if ($scriptPath) {
+        $toolsDir = Split-Path -Parent $scriptPath
+        if ($toolsDir) { $candidate = Split-Path -Parent $toolsDir } else { $candidate = $null }
+        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Container) -and
+            (Test-Path -LiteralPath (Join-Path $candidate '.git'))) {
+            $RepoRoot = $candidate
+        }
+    }
+    if (-not $RepoRoot) {
+        throw "Cannot work out the repository root from the location of this script (expected <repo>\tools\install-hooks.ps1 inside a git working tree); pass -RepoRoot <path>."
+    }
+}
 $marker = '# iptv-roku pre-push secret scan (installed by tools/install-hooks.ps1)'
 
 $hookBody = @'

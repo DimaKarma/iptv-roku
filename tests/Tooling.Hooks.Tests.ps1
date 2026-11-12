@@ -113,6 +113,68 @@ Describe 'install-hooks.ps1' {
     }
 }
 
+# The installer run the way an owner runs it: a child Windows PowerShell with -File and NO
+# -RepoRoot. Every test above passes -RepoRoot, which is how a failing default went unseen
+# ($PSScriptRoot was empty while the param() default was evaluated under 5.1 -File).
+function Invoke-InstallerChild([string] $script, [string] $workDir, [string[]] $extra) {
+    Push-Location $workDir
+    try {
+        $out = (& powershell -NoProfile -ExecutionPolicy Bypass -File $script @extra 2>&1 | Out-String)
+        return [pscustomobject]@{ Out = $out; Exit = $LASTEXITCODE }
+    } finally {
+        Pop-Location
+    }
+}
+
+Describe 'install-hooks.ps1 without -RepoRoot' {
+    BeforeEach {
+        $savedGitEnv = Push-CleanGitEnv
+        # Scratch runs may point this at a different copy of the installer.
+        $under = $env:INSTALLER_UNDER_TEST
+        if (-not $under) { $under = $installer }
+        $repo = Join-Path $TestDrive ([guid]::NewGuid().ToString())
+        New-Item -ItemType Directory -Path (Join-Path $repo 'tools') -Force | Out-Null
+        & git -C $repo init -q 2>&1 | Out-Null
+        $copy = Join-Path $repo 'tools\install-hooks.ps1'
+        Copy-Item -LiteralPath $under -Destination $copy
+        $hook = Join-Path $repo '.git\hooks\pre-push'
+    }
+    AfterEach {
+        Pop-CleanGitEnv $savedGitEnv
+    }
+
+    It 'installs into the repository the script lives in, run from the repository root' {
+        $r = Invoke-InstallerChild $copy $repo @()
+        $r.Exit | Should Be 0
+        (Test-Path -LiteralPath $hook) | Should Be $true
+        [System.IO.File]::ReadAllText($hook).StartsWith('#!/') | Should Be $true
+        $bytes = [System.IO.File]::ReadAllBytes($hook)
+        (@($bytes | Where-Object { $_ -eq 13 }).Count) | Should Be 0
+        $bytes[0] | Should Be 0x23
+    }
+
+    It 'installs into the repository the script lives in, run from another directory' {
+        $elsewhere = Join-Path $TestDrive ([guid]::NewGuid().ToString())
+        New-Item -ItemType Directory -Path $elsewhere | Out-Null
+        $r = Invoke-InstallerChild $copy $elsewhere @()
+        $r.Exit | Should Be 0
+        (Test-Path -LiteralPath $hook) | Should Be $true
+        [System.IO.File]::ReadAllText($hook).StartsWith('#!/') | Should Be $true
+    }
+
+    It 'stops with a pass -RepoRoot message and writes nothing when the script is not inside a git repository' {
+        $plain = Join-Path $TestDrive ([guid]::NewGuid().ToString())
+        New-Item -ItemType Directory -Path (Join-Path $plain 'tools') -Force | Out-Null
+        $plainCopy = Join-Path $plain 'tools\install-hooks.ps1'
+        Copy-Item -LiteralPath $under -Destination $plainCopy
+        $r = Invoke-InstallerChild $plainCopy $plain @()
+        $r.Exit | Should Not Be 0
+        $r.Out | Should Match 'pass -RepoRoot'
+        (Test-Path -LiteralPath (Join-Path $plain '.git')) | Should Be $false
+        @(Get-ChildItem -LiteralPath $plain -Recurse -Force | Where-Object { -not $_.PSIsContainer }).Count | Should Be 1
+    }
+}
+
 Describe 'pre-push hook behaviour' {
     BeforeEach {
         $savedGitEnv = Push-CleanGitEnv
