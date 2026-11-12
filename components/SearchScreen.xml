@@ -15,63 +15,84 @@
     </interface>
 
     <children>
-        <!-- The search field. Drawn here rather than a stock Button: this Group itself
-             holds focus while the field is selected (so Down, OK and Back all reach
-             onKeyEvent reliably) and fieldBg / fieldLabel show the accent focus state.
-             The same two colours as the rail chip: 0xD5401A with on-accent text. -->
+        <!-- The query field, 616 wide above the keyboard. It only DISPLAYS the query (m.query);
+             this Group itself holds focus and handles every key, so nothing here is focusable. -->
         <Rectangle id="fieldBg"
                    translation="[96, 54]"
-                   width="800"
+                   width="616"
                    height="64"
-                   color="0x062230FF" />
+                   color="0x0E3442FF" />
         <Label id="fieldLabel"
                translation="[120, 54]"
-               width="752"
+               width="568"
                height="64"
                vertAlign="center"
                wrap="false"
                color="0x86A6B1FF"
-               text="Search: press OK to type" />
+               text="Type to search" />
 
         <Label id="headerLabel"
-               translation="[96, 140]"
+               translation="[760, 54]"
                color="0xDCE9EEFF"
-               width="1698"
-               height="40" />
+               width="1014"
+               height="64"
+               vertAlign="center" />
 
-        <!-- Same ChannelCard, so the same focus treatment: without the blend this screen
-             would keep the stock white ring while the Channels grid went accent-coloured.
-             Five columns from the x=96 spine: 96 + 5*330 + 4*12 = 1794. -->
-        <MarkupGrid id="channelGrid"
-                    translation="[96, 200]"
-                    itemComponentName="ChannelCard"
-                    itemSize="[330, 220]"
-                    itemSpacing="[12, 12]"
-                    numColumns="5"
-                    numRows="3"
-                    focusBitmapBlendColor="0xEB461DFF" />
+        <!-- Hint under the keyboard. Smaller than the default font by scale only (rule 22):
+             width 770 * 0.8 = 616 on screen. -->
+        <Label id="hintLabel"
+               translation="[96, 668]"
+               width="770"
+               height="45"
+               vertAlign="center"
+               wrap="false"
+               scale="[0.8, 0.8]"
+               scaleRotateCenter="[0, 0]"
+               color="0x86A6B1FF"
+               text="" />
 
         <Label id="statusLabel"
-               translation="[96, 420]"
-               width="1698"
+               translation="[760, 330]"
+               width="1014"
                horizAlign="center"
                color="0x86A6B1FF"
                text="" />
 
-        <!-- The keyboard's x is set at runtime (CenterKeyboard in init and when shown). -->
-        <Rectangle id="keyboardBg"
-                   width="1920"
-                   height="1080"
-                   color="0x020B13E6"
-                   visible="false">
-            <Label id="keyboardHint"
-                   translation="[0, 200]"
-                   width="1920"
-                   horizAlign="center"
-                   color="0xDCE9EEFF"
-                   text="Type to search. Back shows results." />
-            <Keyboard id="keyboard" translation="[274, 250]" />
-        </Rectangle>
+        <!-- The own keyboard: 6 columns x 7 rows of 96x64 cells, gap 8, from x=96, y=140.
+             The cells are created ONCE in init (rule 17). Draw order, bottom to top: key
+             fills, the focus highlight, the active-layout bar, the way-back outline, key
+             texts. The highlight, bar and outline are single nodes moved by translation. -->
+        <Group id="keyBgs" />
+        <Rectangle id="keyHighlight"
+                   translation="[96, 140]"
+                   width="96"
+                   height="64"
+                   color="0xD5401AFF"
+                   visible="false" />
+        <Rectangle id="activeBar"
+                   translation="[408, 632]"
+                   width="96"
+                   height="4"
+                   color="0x60BBD2FF" />
+        <Group id="wayBack" translation="[96, 140]" visible="false">
+            <Rectangle id="wayTop" translation="[0, 0]" width="96" height="4" color="0x86A6B1FF" />
+            <Rectangle id="wayBottom" translation="[0, 60]" width="96" height="4" color="0x86A6B1FF" />
+            <Rectangle id="wayLeft" translation="[0, 0]" width="4" height="64" color="0x86A6B1FF" />
+            <Rectangle id="wayRight" translation="[92, 0]" width="4" height="64" color="0x86A6B1FF" />
+        </Group>
+        <Group id="keyLabels" />
+
+        <!-- Same ChannelCard, so the same focus treatment: without the blend this screen
+             would keep the stock white ring while the Channels grid went accent-coloured.
+             Three columns from x=760: 760 + 3*330 + 2*12 = 1774. -->
+        <MarkupGrid id="channelGrid"
+                    translation="[760, 140]"
+                    itemComponentName="ChannelCard"
+                    itemSize="[330, 220]"
+                    itemSpacing="[12, 12]"
+                    numColumns="3"
+                    numRows="3"
+                    focusBitmapBlendColor="0xEB461DFF" />
 
         <!-- Toast -->
         <!-- 920, matching ChannelsScreen. At 950 the 60px-high toast ended at 1010,

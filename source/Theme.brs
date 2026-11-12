@@ -18,7 +18,7 @@ function getTheme()
     }
 end function
 
-' Centre a Keyboard on the 1920-wide screen at row y. Used by Search, Settings and the
+' Centre a Keyboard on the 1920-wide screen at row y. Used by Settings and the
 ' onboarding screen: a hardcoded x put the right edge past 1920.
 ' boundingRect() can report a zero width before the node has been laid out, so callers
 ' run this once in init AND again when the keyboard is shown; with no usable width it

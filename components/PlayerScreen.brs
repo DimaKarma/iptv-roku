@@ -86,6 +86,14 @@ sub init()
     end if
     
     m.currentIndex = -1
+    ' Previous channel (the Replay key). prevIndex indexes m.top.playlist, which is replaced
+    ' on every start, so it is reset in onPlayCommand and exitPlayer. prevQualified: the
+    ' current channel has played 10 s (set in onRecentTimer). cameByReplay: it was reached
+    ' by Replay. replayJump: the playIndex call in progress comes from the Replay key.
+    m.prevIndex = -1
+    m.prevQualified = false
+    m.cameByReplay = false
+    m.replayJump = false
 end sub
 
 sub addErrorOption(parent as object, title as string)
@@ -94,6 +102,12 @@ sub addErrorOption(parent as object, title as string)
 end sub
 
 sub onPlayCommand()
+    ' A new playlist: nothing of the previous session's indices means anything now.
+    m.prevIndex = -1
+    m.prevQualified = false
+    m.cameByReplay = false
+    m.replayJump = false
+    m.currentIndex = -1
     if m.top.playlist = invalid or m.top.playlist.Count() = 0 then return
     idx = m.top.startIndex
     if idx = invalid or idx < 0 or idx >= m.top.playlist.Count() then idx = 0
@@ -101,9 +115,35 @@ sub onPlayCommand()
 end sub
 
 sub playIndex(idx as integer)
+    ' FIRST statements, before any early return: a Replay flag must never outlive the call
+    ' it was raised for.
+    viaReplay = m.replayJump
+    m.replayJump = false
     if m.top.playlist = invalid or m.top.playlist.Count() = 0 return
     if idx < 0 or idx >= m.top.playlist.Count() return
     
+    ' Previous channel bookkeeping, BEFORE m.currentIndex changes. The outgoing channel
+    ' becomes the previous one only if it is another channel than the one starting, it
+    ' qualified (played 10 s, was reached by Replay, or this very jump is a Replay so that
+    ' A and B toggle) and it is not an adult-group channel. The target becoming current
+    ' clears prevIndex, so Replay never restarts the channel already playing.
+    if m.currentIndex >= 0 and m.currentIndex < m.top.playlist.Count()
+        if idx <> m.currentIndex
+            if m.prevQualified or m.cameByReplay or viaReplay
+                outgoing = m.top.playlist[m.currentIndex]
+                if outgoing <> invalid
+                    if not IsAdultGroup(outgoing.group) then m.prevIndex = m.currentIndex
+                end if
+            end if
+        end if
+    end if
+    if m.prevIndex = idx then m.prevIndex = -1
+    ' A Retry of the same channel keeps its status; any other start begins afresh.
+    if idx <> m.currentIndex
+        m.prevQualified = false
+        m.cameByReplay = viaReplay
+    end if
+
     m.currentIndex = idx
     m.active = true
     channel = m.top.playlist[idx]
@@ -140,8 +180,11 @@ sub playIndex(idx as integer)
     ' fast surf. Same class as the Settings action field that only fired once.
     m.loadingLabel.text = "Loading: " + channel.name
 
-    showMiniBanner(channel)
-    updateOverlayData(channel)
+    ' The guide (m.global.epg, a large map copied on every read) is read ONCE per channel
+    ' change; the banner and the overlay both take the looked-up programme info.
+    info = EpgFind(m.global.epg, channel.name, m.global.nowSec)
+    showMiniBanner(channel, info)
+    updateOverlayData(channel, info)
     
     focusPlayer()
 end sub
@@ -227,6 +270,8 @@ end sub
 
 ' Fires 10 s after playback started: the channel it was armed for goes into Recent.
 sub onRecentTimer()
+    ' The channel has played 10 s: it qualifies as "previous" when the next one starts.
+    m.prevQualified = true
     if m.recentName <> invalid
         PushRecent(m.recentName)
         ' The only write site of the resume channel. The argument is m.recentName, the
@@ -351,7 +396,7 @@ sub hideOverlay()
     m.clockTimer.control = "stop"
 end sub
 
-sub updateOverlayData(channel as object)
+sub updateOverlayData(channel as object, info as object)
     m.overlayName.text = channel.name
     if channel.group <> invalid
         m.overlayGroupLabel.text = channel.group
@@ -359,7 +404,6 @@ sub updateOverlayData(channel as object)
         m.overlayGroupLabel.text = ""
     end if
     
-    info = EpgFind(m.global.epg, channel.name, m.global.nowSec)
     s = ""
     if info.now <> invalid then s = "Now: " + info.now.t + " (" + EpgFmtHM(info.now.s) + "-" + EpgFmtHM(info.now.e) + ")"
     if info.next <> invalid then s = s + "   Next: " + info.next.t
@@ -374,12 +418,11 @@ end sub
 ' (M3uParser falls back to "Uncategorized") and tells the viewer where they are.
 ' Which of the two it is reads from the colour, from the presence of the end time,
 ' and from the progress foot -- three signals, no layout change either way.
-sub showMiniBanner(channel as object)
+sub showMiniBanner(channel as object, info as object)
     if channel = invalid then return
 
     m.miniBannerLabel.text = channel.name
 
-    info = EpgFind(m.global.epg, channel.name, m.global.nowSec)
     dur = 3.0
     if info.now <> invalid
         m.zapLine2.text = info.now.t
@@ -475,13 +518,39 @@ sub zapDown()
     zap(1)
 end sub
 
+' Can the arrows land on this entry? It must be playable, and (OWNER'S RULE) flipping with
+' the arrows never goes from a non-adult channel onto an adult-group one: such entries are
+' passed over exactly like incompatible ones. When the channel being left is itself adult
+' (chosen explicitly in the grid, search or zapper panel) nothing is skipped, otherwise the
+' arrows would be dead inside the adult category. The zapper PANEL does not use this: picking
+' an adult channel there is an explicit choice.
+function zapTargetOk(ch as dynamic, fromAdult as boolean) as boolean
+    if ch = invalid then return false
+    if ch.compatible <> true then return false
+    if not fromAdult
+        if IsAdultGroup(ch.group) then return false
+    end if
+    return true
+end function
+
+' One search for both directions (zapUp and zapDown only pick the step). It visits every
+' OTHER entry once and never the current channel again, so when nothing qualifies nothing
+' happens: no restart of the channel already playing and no dialog.
 sub zap(stepDelta as integer)
     if m.top.playlist = invalid or m.top.playlist.Count() = 0 return
     
     count = m.top.playlist.Count()
     idx = m.currentIndex
     
-    for i = 1 to count
+    fromAdult = false
+    tries = count
+    if idx >= 0 and idx < count
+        tries = count - 1
+        cur = m.top.playlist[idx]
+        if cur <> invalid then fromAdult = IsAdultGroup(cur.group)
+    end if
+    
+    for i = 1 to tries
         idx = idx + stepDelta
         if idx < 0
             idx = count - 1
@@ -489,12 +558,32 @@ sub zap(stepDelta as integer)
             idx = 0
         end if
         
-        ch = m.top.playlist[idx]
-        if ch <> invalid and ch.compatible = true
+        if zapTargetOk(m.top.playlist[idx], fromAdult)
             playIndex(idx)
             return
         end if
     end for
+end sub
+
+' The Replay key: back to the channel that played before this one. The target is
+' re-checked NOW, not trusted from when it was stored: in range, compatible and not an
+' adult-group channel (an adult channel is reachable only by an explicit choice).
+sub playPrevious()
+    if m.active <> true then return
+    pl = m.top.playlist
+    ok = false
+    if pl <> invalid and m.prevIndex >= 0 and m.prevIndex < pl.Count()
+        target = pl[m.prevIndex]
+        if target <> invalid
+            if target.compatible = true and not IsAdultGroup(target.group) then ok = true
+        end if
+    end if
+    if not ok
+        showToast("No previous channel")
+        return
+    end if
+    m.replayJump = true
+    playIndex(m.prevIndex)
 end sub
 
 sub exitPlayer()
@@ -503,6 +592,10 @@ sub exitPlayer()
     disarmStallWatchdog()
     disarmRecentTimer()
     m.hasPlayed = false
+    m.prevIndex = -1
+    m.prevQualified = false
+    m.cameByReplay = false
+    m.replayJump = false
     m.active = false
     m.video.control = "stop"
     m.errorDialog.visible = false
@@ -646,6 +739,9 @@ function onKeyEvent(key as string, press as boolean) as boolean
                 handled = true
             else if key = "left"
                 openZapper()
+                handled = true
+            else if key = "replay"
+                playPrevious()
                 handled = true
             else if key = "options"
                 if m.currentIndex >= 0 and m.top.playlist <> invalid

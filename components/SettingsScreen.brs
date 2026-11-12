@@ -106,7 +106,7 @@ end function
 sub updateInfo()
     ' Both values are bumped by hand with each release and are bound to the manifest
     ' by a test (tests/BrightScript.Lint.Tests.ps1).
-    appVersion = "1.2.0"
+    appVersion = "1.3.0"
     buildDate = "2026-11-12"
     idx = m.settingsList.itemFocused
     if m.forceInfoRow <> invalid and m.forceInfoRow >= 0

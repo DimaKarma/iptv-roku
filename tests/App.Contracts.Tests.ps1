@@ -8,6 +8,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $taskBrs = Join-Path $projectRoot 'components\tasks\PlaylistTask.brs'
 $taskXml = Join-Path $projectRoot 'components\tasks\PlaylistTask.xml'
 $searchXml = Join-Path $projectRoot 'components\SearchScreen.xml'
+$searchBrs = Join-Path $projectRoot 'components\SearchScreen.brs'
 $translit = Join-Path $projectRoot 'source\Translit.brs'
 $settingsBrs = Join-Path $projectRoot 'components\SettingsScreen.brs'
 $playerBrs = Join-Path $projectRoot 'components\PlayerScreen.brs'
@@ -125,11 +126,13 @@ Describe 'Translit and Search wiring (S1)' {
         $src | Should Match '&h430'
     }
 
-    It 'the search field is not a stock Button and the hint paragraph is gone' {
+    It 'the search field is not a stock Button; the result grid has 3 columns and the hint line exists' {
         $xml = Get-Content -Raw $searchXml
         $xml | Should Not Match '<Button\b'
-        $xml | Should Not Match 'id="hintLabel"'
-        $xml | Should Match 'numColumns="5"'
+        $xml | Should Not Match 'id="keyboardHint"'
+        $xml | Should Match 'id="hintLabel"'
+        $xml | Should Match 'numColumns="3"'
+        $xml | Should Not Match 'numColumns="5"'
     }
 }
 
@@ -544,5 +547,269 @@ Describe 'Resume and grid refresh hardening (1.2.0 audit round)' {
         $body | Should Match 'm\.forceInfoRow = row'
         ($iFocus -lt $iInfo) | Should Be $true
         (Get-BrsCode (Get-BrsBody $src 'sub updateInfo\(\)')) | Should Match 'idx = m\.forceInfoRow'
+    }
+}
+
+Describe 'Search S2: own keyboard (1.3.0)' {
+    It 'SearchScreen declares no stock Keyboard node and keeps none of the old keyboard plumbing' {
+        $xml = Get-Content -Raw $searchXml
+        $xml.Length -gt 1500 | Should Be $true          # positive control: the file was read
+        $xml | Should Not Match '<\s*Keyboard\b'
+        $xml | Should Not Match 'id="keyboardBg"'
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        $code | Should Not Match 'openKeyboard|closeKeyboard|m\.keyboard\b|CenterKeyboard'
+    }
+
+    It 'SearchScreen sources contain no byte above 0x7F' {
+        # positive control: the detector must catch a high byte (e-acute is 2 bytes in UTF-8)
+        $ctl = [System.Text.Encoding]::UTF8.GetBytes('caf' + [char]0xE9)
+        @($ctl | Where-Object { $_ -gt 127 }).Count | Should Be 2
+        foreach ($f in $searchBrs, $searchXml) {
+            $bytes = [System.IO.File]::ReadAllBytes($f)
+            $bytes.Length -gt 1500 | Should Be $true    # positive control: the file was read
+            @($bytes | Where-Object { $_ -gt 127 }).Count | Should Be 0
+        }
+    }
+
+    It 'the Russian table is exactly U+0430..U+044F plus U+0451, built with Chr' {
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        $body = Get-BrsBody $code 'function buildLayouts\(\) as object'
+        $body.Length -gt 400 | Should Be $true
+        $set = @()
+        foreach ($m in [regex]::Matches($body, 'for cp = &h([0-9A-Fa-f]+) to &h([0-9A-Fa-f]+)\s+ru\.Push\(Chr\(cp\)\)')) {
+            $set += [Convert]::ToInt32($m.Groups[1].Value, 16)..[Convert]::ToInt32($m.Groups[2].Value, 16)
+        }
+        foreach ($m in [regex]::Matches($body, 'ru\.Push\(Chr\(&h([0-9A-Fa-f]+)\)\)')) {
+            $set += [Convert]::ToInt32($m.Groups[1].Value, 16)
+        }
+        $expected = @(0x430..0x44F) + @(0x451)
+        $expected.Count | Should Be 33                  # positive control for the expected set
+        (($set | Sort-Object) -join ',') | Should Be (($expected | Sort-Object) -join ',')
+        # no other hex literal anywhere in the file (a stray one would hide an extra letter)
+        ([regex]::Matches($code, '&h[0-9A-Fa-f]+')).Count | Should Be 5
+    }
+
+    It 'OK on a key acts on PRESS and its release is swallowed only when armed here' {
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        $keys = Get-BrsBody $code 'function onKeysKey\(key as string\) as boolean'
+        $keys | Should Match '(?s)key = "OK"\s+m\.okArmed = true\s+activateKey\(\)'
+        $ev = Get-BrsBody $code 'function onKeyEvent\(key as string, press as boolean\) as boolean'
+        $ev | Should Match '(?s)if key = "OK" and not press\s+if m\.okArmed\s+m\.okArmed = false\s+return true\s+end if\s+return false'
+        $ev | Should Match 'if not press then return false'
+    }
+
+    It 'okArmed is cleared in focusGrid, focusKeyboard and onVisibleChange' {
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        foreach ($sig in 'sub focusGrid\(\)', 'sub focusKeyboard\(\)', 'sub onVisibleChange\(\)') {
+            $body = Get-BrsBody $code $sig
+            $body.Length -gt 60 | Should Be $true
+            $body | Should Match 'm\.okArmed = false'
+        }
+    }
+
+    It 'Right at the edge stops the timer and searches BEFORE moving, and moves only if there are items' {
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        $go = Get-BrsBody $code 'sub goToResults\(\)'
+        $go.Length -gt 80 | Should Be $true
+        $iStop = $go.IndexOf('m.searchTimer.control = "stop"')
+        $iSearch = $go.IndexOf('performSearch()')
+        $iMove = $go.IndexOf('focusGrid()')
+        $iStop | Should BeGreaterThan -1
+        ($iStop -lt $iSearch) | Should Be $true
+        ($iSearch -lt $iMove) | Should Be $true
+        $go | Should Match 'if hasItems\(\) then focusGrid\(\)'
+        $keys = Get-BrsBody $code 'function onKeysKey\(key as string\) as boolean'
+        $keys | Should Match '(?s)key = "right"\s+c = findCol\(m\.kr, m\.kc, 1\)\s+if c >= 0\s+setCursor\(m\.kr, c\)\s+else\s+goToResults\(\)'
+    }
+
+    It 'Delete uses Mid, never Left, and nothing upper-cases the query; * deletes on the keyboard' {
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        $del = Get-BrsBody $code 'sub deleteChar\(\)'
+        $del | Should Match 'Mid\(q, 1, Len\(q\) - 1\)'
+        $del | Should Not Match '\bLeft\('
+        $code | Should Not Match 'UCase'
+        $keys = Get-BrsBody $code 'function onKeysKey\(key as string\) as boolean'
+        $keys | Should Match '(?s)key = "options"\s+deleteChar\(\)'
+    }
+
+    It 'Up and Down wrap between row 0 and row 6; Left at the first column does nothing' {
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        $mv = Get-BrsBody $code 'sub moveVertical\(delta as integer\)'
+        $mv | Should Match 'if r < 0 then r = 6'
+        $mv | Should Match 'if r > 6 then r = 0'
+        $keys = Get-BrsBody $code 'function onKeysKey\(key as string\) as boolean'
+        $keys | Should Match '(?s)key = "left"\s+c = findCol\(m\.kr, m\.kc, -1\)\s+if c >= 0 then setCursor\(m\.kr, c\)\s+handled = true'
+    }
+
+    It 'grid: Back and Left from column 0 return to the keyboard, Up from the first row does nothing' {
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        $g = Get-BrsBody $code 'function onGridKey\(key as string\) as boolean'
+        $g | Should Match '(?s)key = "back"\s+focusKeyboard\(\)'
+        $g | Should Match '(?s)key = "left"\s+if m\.channelGrid\.itemFocused mod m\.gridCols = 0\s+focusKeyboard\(\)'
+        $g | Should Match 'key = "up"\s+if m\.channelGrid\.itemFocused < m\.gridCols then handled = true'
+        $g | Should Not Match 'focusField'
+    }
+
+    It 'the keyboard geometry is 96x64 cells, step 104 x 72, from x=96 y=140; the grid starts at x=760' {
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        $init = Get-BrsBody $code 'sub init\(\)'
+        $init | Should Match 'x = 96 \+ col \* 104'
+        $init | Should Match 'y = 140 \+ r \* 72'
+        $init | Should Match '(?s)bg\.width = 96\s+bg\.height = 64'
+        (Get-Content -Raw $searchXml) | Should Match '(?s)id="channelGrid"\s+translation="\[760, 140\]"'
+    }
+
+    It 'SearchScreen.brs carries no colour literal: colours come from getTheme()' {
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        $code.Length -gt 3000 | Should Be $true
+        $code | Should Not Match '0x[0-9A-Fa-f]{6}'
+        $code | Should Match 'm\.theme = getTheme\(\)'
+    }
+}
+
+Describe 'Previous channel on Replay, guide read once, version (1.3.0)' {
+    It 'prevIndex is reset in onPlayCommand and in exitPlayer' {
+        $code = Get-BrsCode (Get-Content -Raw $playerBrs)
+        foreach ($sig in 'sub onPlayCommand\(\)', 'sub exitPlayer\(\)') {
+            $body = Get-BrsBody $code $sig
+            $body.Length -gt 100 | Should Be $true
+            $body | Should Match 'm\.prevIndex = -1'
+        }
+    }
+
+    It 'the Replay branch re-checks range, compatible and IsAdultGroup of the TARGET before playing' {
+        $code = Get-BrsCode (Get-Content -Raw $playerBrs)
+        $p = Get-BrsBody $code 'sub playPrevious\(\)'
+        $p.Length -gt 200 | Should Be $true
+        $p | Should Match 'm\.prevIndex >= 0 and m\.prevIndex < pl\.Count\(\)'
+        $p | Should Match 'target\.compatible = true and not IsAdultGroup\(target\.group\)'
+        $p | Should Match 'showToast\("No previous channel"\)'
+        $iCheck = $p.IndexOf('IsAdultGroup(')
+        $iPlay = $p.IndexOf('playIndex(m.prevIndex)')
+        $iCheck | Should BeGreaterThan -1
+        ($iCheck -lt $iPlay) | Should Be $true
+        $key = Get-BrsBody $code 'function onKeyEvent\(key as string, press as boolean\) as boolean'
+        $key | Should Match '(?s)key = "replay"\s+playPrevious\(\)'
+    }
+
+    It 'prevIndex is assigned from the outgoing channel in one place: guarded by idx <> currentIndex and by IsAdultGroup' {
+        $code = Get-BrsCode (Get-Content -Raw $playerBrs)
+        # EVERY assignment to m.prevIndex that is not -1, in whatever form (comparisons after
+        # "if " or "and " are not assignments)
+        $assigns = @([regex]::Matches($code, '(?<!if )(?<!and )m\.prevIndex\s*=\s*([^\r\n]*)') | ForEach-Object { $_.Groups[1].Value.Trim() } | Where-Object { $_ -ne '-1' })
+        $assigns.Count | Should Be 1
+        $assigns[0] | Should Be 'm.currentIndex'
+        ([regex]::Matches($code, 'm\.prevIndex = m\.currentIndex')).Count | Should Be 1
+        $play = Get-BrsBody $code 'sub playIndex\(idx as integer\)'
+        $iGuard = $play.IndexOf('if idx <> m.currentIndex')
+        $iAdult = $play.IndexOf('if not IsAdultGroup(outgoing.group) then m.prevIndex = m.currentIndex')
+        $iSet = $play.IndexOf('m.currentIndex = idx')
+        $iGuard | Should BeGreaterThan -1
+        ($iGuard -lt $iAdult) | Should Be $true
+        ($iAdult -lt $iSet) | Should Be $true
+        $play | Should Match 'if m\.prevIndex = idx then m\.prevIndex = -1'
+    }
+
+    It 'the 10 s Recent timer marks the channel as qualifying for Replay' {
+        $code = Get-BrsCode (Get-Content -Raw $playerBrs)
+        (Get-BrsBody $code 'sub onRecentTimer\(\)') | Should Match 'm\.prevQualified = true'
+        (Get-BrsBody $code 'sub playIndex\(idx as integer\)') | Should Match 'm\.prevQualified or m\.cameByReplay or viaReplay'
+    }
+
+    It 'the guide is read once in playIndex and not by the banner or the overlay' {
+        $code = Get-BrsCode (Get-Content -Raw $playerBrs)
+        $play = Get-BrsBody $code 'sub playIndex\(idx as integer\)'
+        ([regex]::Matches($play, 'm\.global\.epg')).Count | Should Be 1
+        $play | Should Match 'showMiniBanner\(channel, info\)'
+        $play | Should Match 'updateOverlayData\(channel, info\)'
+        foreach ($sig in 'sub showMiniBanner\(channel as object, info as object\)', 'sub updateOverlayData\(channel as object, info as object\)') {
+            $body = Get-BrsBody $code $sig
+            $body.Length -gt 100 | Should Be $true
+            $body | Should Not Match 'm\.global\.epg'
+        }
+    }
+
+    It 'Right in the player does NOT open the zapper: only Left does' {
+        $code = Get-BrsCode (Get-Content -Raw $playerBrs)
+        $key = Get-BrsBody $code 'function onKeyEvent\(key as string, press as boolean\) as boolean'
+        $key.Length -gt 800 | Should Be $true
+        ([regex]::Matches($key, 'openZapper\(\)')).Count | Should Be 1
+        $key | Should Match '(?s)else if key = "left"\s+openZapper\(\)'
+        $key | Should Not Match '"right"[^\r\n]*\r?\n\s*openZapper\(\)'
+    }
+
+    It 'the About version literal is 1.3.0' {
+        (Get-Content -Raw $settingsBrs) | Should Match '(?m)^\s*appVersion = "1\.3\.0"\s*$'
+        (Get-Content -Raw (Join-Path $projectRoot 'manifest')) | Should Match '(?m)^minor_version=3\s*$'
+    }
+}
+
+Describe 'Zap skips adult channels; Search and Replay hardening (1.3.0 round 2)' {
+    It 'zapTargetOk skips an adult target only when the channel being left is not adult' {
+        $code = Get-BrsCode (Get-Content -Raw $playerBrs)
+        $h = Get-BrsBody $code 'function zapTargetOk\(ch as dynamic, fromAdult as boolean\) as boolean'
+        $h.Length -gt 150 | Should Be $true
+        $h | Should Match 'if ch\.compatible <> true then return false'
+        $h | Should Match '(?s)if not fromAdult\s+if IsAdultGroup\(ch\.group\) then return false\s+end if'
+        $h | Should Match 'return true\s+end function'
+    }
+
+    It 'zap decides fromAdult from the CURRENT channel and applies the helper to every candidate' {
+        $code = Get-BrsCode (Get-Content -Raw $playerBrs)
+        $z = Get-BrsBody $code 'sub zap\(stepDelta as integer\)'
+        $z.Length -gt 300 | Should Be $true
+        $z | Should Match 'fromAdult = IsAdultGroup\(cur\.group\)'
+        $z | Should Match 'cur = m\.top\.playlist\[idx\]'
+        $z | Should Match 'if zapTargetOk\(m\.top\.playlist\[idx\], fromAdult\)\s+playIndex\(idx\)'
+        $z | Should Not Match 'ch\.compatible'
+        $z | Should Match 'tries = count - 1'
+        $iFrom = $z.IndexOf('fromAdult = IsAdultGroup')
+        $iLoop = $z.IndexOf('for i = 1 to tries')
+        $iFrom | Should BeGreaterThan -1
+        ($iFrom -lt $iLoop) | Should Be $true
+    }
+
+    It 'both zap directions go through the same zap and the helper has no other caller' {
+        $code = Get-BrsCode (Get-Content -Raw $playerBrs)
+        (Get-BrsBody $code 'sub zapUp\(\)') | Should Match 'zap\(-1\)'
+        (Get-BrsBody $code 'sub zapDown\(\)') | Should Match 'zap\(1\)'
+        ([regex]::Matches($code, 'zapTargetOk\(')).Count | Should Be 2      # the definition and the one call in zap
+        ([regex]::Matches($code, 'sub zap\(')).Count | Should Be 1
+        # the zapper panel is untouched: it picks by index and never calls the helper
+        (Get-BrsBody $code 'sub onZapperSelected\(\)') | Should Not Match 'zapTargetOk|IsAdultGroup'
+    }
+
+    It 'playIndex reads and clears replayJump as its FIRST statements, before any return' {
+        $code = Get-BrsCode (Get-Content -Raw $playerBrs)
+        $play = Get-BrsBody $code 'sub playIndex\(idx as integer\)'
+        $iRead = $play.IndexOf('viaReplay = m.replayJump')
+        $iClear = $play.IndexOf('m.replayJump = false')
+        $iReturn = $play.IndexOf('return')
+        $iRead | Should BeGreaterThan -1
+        ($iRead -lt $iClear) | Should Be $true
+        ($iClear -lt $iReturn) | Should Be $true
+        ([regex]::Matches($play, 'm\.replayJump')).Count | Should Be 2
+    }
+
+    It 'Right rebuilds the results only when a search is pending; hasItems still gates the move' {
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        $go = Get-BrsBody $code 'sub goToResults\(\)'
+        $go | Should Match '(?s)if m\.searchDirty\s+m\.searchTimer\.control = "stop"\s+performSearch\(\)\s+end if\s+if hasItems\(\) then focusGrid\(\)'
+        (Get-BrsBody $code 'sub onQueryChanged\(\)') | Should Match 'm\.searchDirty = true'
+        (Get-BrsBody $code 'sub performSearch\(\)') | Should Match 'm\.searchDirty = false'
+    }
+
+    It 'the function row words are scaled about the cell centre, letters keep the default size' {
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        $init = Get-BrsBody $code 'sub init\(\)'
+        $init | Should Match '(?s)if r = 6\s+lbl\.text = fnWords\[col\]\s+lbl\.scale = \[0\.8, 0\.8\]\s+lbl\.scaleRotateCenter = \[48, 32\]\s+end if'
+        ([regex]::Matches($code, 'lbl\.scale\s*=')).Count | Should Be 1
+    }
+
+    It 'Theme.brs no longer says CenterKeyboard is used by Search' {
+        $t = Get-Content -Raw (Join-Path $projectRoot 'source\Theme.brs')
+        $t.Length -gt 800 | Should Be $true
+        $t | Should Match 'CenterKeyboard'
+        $t | Should Not Match 'Used by Search'
     }
 }
