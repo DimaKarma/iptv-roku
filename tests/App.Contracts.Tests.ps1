@@ -738,9 +738,10 @@ Describe 'Previous channel on Replay, guide read once, version (1.3.0)' {
         $key | Should Not Match '"right"[^\r\n]*\r?\n\s*openZapper\(\)'
     }
 
-    It 'the About version literal is 1.3.0' {
-        (Get-Content -Raw $settingsBrs) | Should Match '(?m)^\s*appVersion = "1\.3\.0"\s*$'
+    It 'the About version literal is 1.3.1' {
+        (Get-Content -Raw $settingsBrs) | Should Match '(?m)^\s*appVersion = "1\.3\.1"\s*$'
         (Get-Content -Raw (Join-Path $projectRoot 'manifest')) | Should Match '(?m)^minor_version=3\s*$'
+        (Get-Content -Raw (Join-Path $projectRoot 'manifest')) | Should Match '(?m)^build_version=1\s*$'
     }
 }
 
@@ -802,7 +803,7 @@ Describe 'Zap skips adult channels; Search and Replay hardening (1.3.0 round 2)'
     It 'the function row words are scaled about the cell centre, letters keep the default size' {
         $code = Get-BrsCode (Get-Content -Raw $searchBrs)
         $init = Get-BrsBody $code 'sub init\(\)'
-        $init | Should Match '(?s)if r = 6\s+lbl\.text = fnWords\[col\]\s+lbl\.scale = \[0\.8, 0\.8\]\s+lbl\.scaleRotateCenter = \[48, 32\]\s+end if'
+        $init | Should Match '(?s)if r = 6\s+lbl\.text = fnWords\[col\]\s+lbl\.width = 128\s+lbl\.translation = \[x - 16, y\]\s+lbl\.scale = \[0\.8, 0\.8\]\s+lbl\.scaleRotateCenter = \[64, 32\]\s+end if'
         ([regex]::Matches($code, 'lbl\.scale\s*=')).Count | Should Be 1
     }
 
@@ -811,5 +812,49 @@ Describe 'Zap skips adult channels; Search and Replay hardening (1.3.0 round 2)'
         $t.Length -gt 800 | Should Be $true
         $t | Should Match 'CenterKeyboard'
         $t | Should Not Match 'Used by Search'
+    }
+}
+
+Describe 'Search key routing survives a press that moves focus away (1.3.1)' {
+    It 'onKeyEvent returns false before any action when the screen is not visible' {
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        $ev = Get-BrsBody $code 'function onKeyEvent\(key as string, press as boolean\) as boolean'
+        $ev.Length -gt 300 | Should Be $true
+        $iVis = $ev.IndexOf('if not m.top.visible then return false')
+        $iRel = $ev.IndexOf('if key = "OK" and not press')
+        $iKeys = $ev.IndexOf('onKeysKey(key)')
+        $iGrid = $ev.IndexOf('onGridKey(key)')
+        $iVis | Should BeGreaterThan -1
+        ($iVis -lt $iRel) | Should Be $true
+        ($iVis -lt $iKeys) | Should Be $true
+        ($iVis -lt $iGrid) | Should Be $true
+    }
+
+    It 'the keyboard branch runs only while the explicit state says keyboard; the grid branch needs its own focus' {
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        $ev = Get-BrsBody $code 'function onKeyEvent\(key as string, press as boolean\) as boolean'
+        $ev | Should Match '(?s)if m\.keysFocused then return onKeysKey\(key\)\s+if m\.channelGrid\.hasFocus\(\) then return onGridKey\(key\)\s+return false'
+        ([regex]::Matches($ev, 'onKeysKey\(key\)')).Count | Should Be 1
+        $ev | Should Not Match 'hasFocus\(\)\s+then return onKeysKey|not m\.channelGrid\.hasFocus'
+    }
+
+    It 'm.keysFocused is assigned only in init, focusKeyboard and focusGrid' {
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        $total = [regex]::Matches($code, 'm\.keysFocused\s*=(?!=)')
+        $total.Count | Should Be 3
+        $inBodies = 0
+        foreach ($sig in 'sub init\(\)', 'sub focusKeyboard\(\)', 'sub focusGrid\(\)') {
+            $inBodies += [regex]::Matches((Get-BrsBody $code $sig), 'm\.keysFocused\s*=(?!=)').Count
+        }
+        $inBodies | Should Be 3
+        (Get-BrsBody $code 'sub focusKeyboard\(\)') | Should Match 'm\.keysFocused = true'
+        (Get-BrsBody $code 'sub focusGrid\(\)') | Should Match 'm\.keysFocused = false'
+    }
+
+    It 'an OK press while the state is grid never types: activateKey is reached only from onKeysKey' {
+        $code = Get-BrsCode (Get-Content -Raw $searchBrs)
+        ([regex]::Matches($code, 'activateKey\(\)')).Count | Should Be 2      # the definition and the one call
+        (Get-BrsBody $code 'function onKeysKey\(key as string\) as boolean') | Should Match 'activateKey\(\)'
+        (Get-BrsBody $code 'function onGridKey\(key as string\) as boolean') | Should Not Match 'activateKey|typeChar'
     }
 }

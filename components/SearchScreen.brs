@@ -100,10 +100,14 @@ sub init()
         lbl.vertAlign = "center"
         if r = 6
             lbl.text = fnWords[col]
-            ' Words in 96 px cells: smaller than the default font by scale only (rule 22),
-            ' about the cell centre. The letters keep the default size.
+            ' Words in 96 px cells: smaller than the default font by scale only (rule 22).
+            ' A Label ellipsises at its UNSCALED width, so the label is 128 wide (128 * 0.8 =
+            ' 102.4 on screen), moved 16 left so its centre (64) stays on the cell centre
+            ' (x + 48), and scaled about that centre. The letters keep the default size.
+            lbl.width = 128
+            lbl.translation = [x - 16, y]
             lbl.scale = [0.8, 0.8]
-            lbl.scaleRotateCenter = [48, 32]
+            lbl.scaleRotateCenter = [64, 32]
         end if
         m.cellLabel.Push(lbl)
         m.cellInert.Push(false)
@@ -582,6 +586,10 @@ end sub
 ' saw the press, so a release that belongs to another screen (the rail selects on press and
 ' the release lands here) is left alone and can never type.
 function onKeyEvent(key as string, press as boolean) as boolean
+    ' A hidden screen acts on nothing. The grid raises its selection on the OK PRESS,
+    ' MainScene hides this screen and moves focus to the player, and the SAME press then
+    ' continues up to this handler: it must not be read as a key press on the keyboard.
+    if not m.top.visible then return false
     if key = "OK" and not press
         if m.okArmed
             m.okArmed = false
@@ -590,8 +598,12 @@ function onKeyEvent(key as string, press as boolean) as boolean
         return false
     end if
     if not press then return false
+    ' Where focus is comes from m.keysFocused (set only by focusKeyboard / focusGrid), never
+    ' from hasFocus() being false: a press that already moved focus away must not fall
+    ' through to the keyboard.
+    if m.keysFocused then return onKeysKey(key)
     if m.channelGrid.hasFocus() then return onGridKey(key)
-    return onKeysKey(key)
+    return false
 end function
 
 function onKeysKey(key as string) as boolean
