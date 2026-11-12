@@ -12,21 +12,26 @@ concurrency:
   group: epg
   cancel-in-progress: false
 
+# Two jobs, so that the step which parses a 46 MB feed fetched over plain HTTP from a
+# third party never runs in the same job as the credential that can write to this
+# repository. `generate` has read-only permissions and no push token; it hands ONE file to
+# `publish` through an artifact, and `publish` re-validates that file before it is hashed.
 jobs:
-  build:
+  generate:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      sha256: ${{ steps.digest.outputs.sha256 }}
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
         with:
-          # Do not leave the push token in .git/config for the whole job. By default
-          # checkout stores GITHUB_TOKEN as an HTTP extraheader, so every later step --
-          # including `pip install` and the generator, which parse a 46 MB feed fetched
-          # over plain HTTP from a third party -- runs with a credential that can write to
-          # this repository. The publish step below is handed the token explicitly instead.
+          # No push token is stored in .git/config. (This job has none to store, but the
+          # setting is kept so that a later permissions change cannot quietly hand the
+          # feed parser a credential.)
           persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
           python-version: '3.11'
       - name: Install dependencies
@@ -36,10 +41,54 @@ jobs:
       - name: Generate epg.json
         working-directory: epg
         run: python generate_epg.py
+      - name: Check the guide and its size
+        id: digest
+        run: |
+          # The artefact must be a plausible guide before it is handed on. A zero-byte
+          # epg/epg.json otherwise passes through the whole pipeline and publishes cleanly.
+          python -c "
+          import json, sys
+          d = json.load(open(sys.argv[1], encoding='utf-8'))
+          n = len(d.get('epg', {}))
+          assert n and n == d.get('count'), 'degenerate guide: count=%r epg=%d' % (d.get('count'), n)
+          print('guide ok: %d channels' % n)
+          " epg/epg.json
+
+          # A guide this large means a bound in the generator stopped working (the real
+          # file is under 1 MB). Refuse it here so the run goes red instead of publishing.
+          size=$(wc -c < epg/epg.json)
+          echo "epg.json size: $size bytes"
+          [ "$size" -le 3000000 ] || { echo "epg.json is $size bytes, over the 3000000 byte limit; refusing to publish"; exit 1; }
+
+          # The publish job recomputes this over the downloaded file: a different digest
+          # means the artefact was altered between the two jobs.
+          echo "sha256=$(sha256sum epg/epg.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
+        with:
+          name: epg-json
+          path: epg/epg.json
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: generate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6.0.0
+        with:
+          name: epg-json
+          path: artifact
       - name: Publish epg.json to the epg-data branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECTED_SHA256: ${{ needs.generate.outputs.sha256 }}
         run: |
+          # No checkout in this job, so there is no repository yet: the plumbing below
+          # (hash-object -w, mktree, commit-tree) only needs an object database.
+          git init -q
           git config user.name "epg-bot"
           git config user.email "epg-bot@users.noreply.github.com"
 
@@ -59,24 +108,26 @@ jobs:
           # 463 runs. Runs are serialised by the `concurrency` group above, so two
           # force-pushes cannot race.
 
-          # The artefact must be a plausible guide before anything is hashed. A zero-byte
-          # epg/epg.json otherwise passes through this whole block and publishes cleanly.
+          # Re-validate what was DOWNLOADED, not what the previous job says it uploaded.
+          [ "$(sha256sum artifact/epg.json | cut -d' ' -f1)" = "$EXPECTED_SHA256" ] || { echo "artifact digest differs from the one generate computed"; exit 1; }
+          size=$(wc -c < artifact/epg.json)
+          [ "$size" -le 3000000 ] || { echo "artifact is $size bytes, over the 3000000 byte limit; refusing to publish"; exit 1; }
           python -c "
-          import json
-          d = json.load(open('epg/epg.json', encoding='utf-8'))
+          import json, sys
+          d = json.load(open(sys.argv[1], encoding='utf-8'))
           n = len(d.get('epg', {}))
           assert n and n == d.get('count'), 'degenerate guide: count=%r epg=%d' % (d.get('count'), n)
           print('guide ok: %d channels' % n)
-          "
+          " artifact/epg.json
 
-          # The generator writes epg/epg.json, and `git mktree` rejects a path containing a
-          # slash, so the TREE ENTRY is named epg.json while the SOURCE stays epg/epg.json.
+          # The artefact is downloaded to artifact/epg.json, and `git mktree` rejects a path containing
+          # a slash, so the TREE ENTRY is named epg.json while the SOURCE stays artifact/epg.json.
           # --no-filters: .gitattributes at the root of main sets `* text=auto eol=lf` and
           # applies to paths under epg/ too, while the old `git add` ran on the epg-data
           # branch, which carries no .gitattributes. Measured: this only changes the hash
           # for CRLF input -- a multi-line LF file hashes identically either way -- so it
           # guards a Windows-authored file reaching the generator, not indentation.
-          blob=$(git hash-object -w --no-filters epg/epg.json)
+          blob=$(git hash-object -w --no-filters artifact/epg.json)
           tree=$(printf '100644 blob %s\tepg.json\n' "$blob" | git mktree)
 
           # A slashed path fails loudly; a TYPO does not. `epg.jsn` builds a tree at exit 0,

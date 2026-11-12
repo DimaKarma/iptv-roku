@@ -62,15 +62,22 @@ needed; whether your provider serves it is worth checking before settling for `h
 ## Install via the deploy script (Windows)
 1. Enable Developer Mode on the Roku TV: `Home x3, Up x2, Right, Left, Right, Left, Right`.
 2. Set a password and note the TV's IP address.
-3. Pass the password to the script — **never put it in the file**:
+3. Tell the script which television to use, and the password -- **never put either in a
+   file**. The address is mandatory: there is no default and no discovery.
    ```powershell
    $env:ROKU_PASS = "<your dev password>"
-   .\deploy.ps1 -RokuIp <TV_IP>
+   $env:ROKU_IP = "<TV_IP>"        # or pass -RokuIp <TV_IP>
+   .\deploy.ps1
    ```
-   (`-RokuPass <password>` works too.) The script has no default and refuses to run
-   without one, so the password stays out of the repository.
-4. It compile-checks the sources, backs up your favorites off the TV, builds the ZIP
-   archive and uploads it.
+   (`-RokuPass <password>` works too.) The script has no default password either and
+   refuses to run without one, so the password stays out of the repository.
+4. Create `tools/expected-device.txt` (gitignored) holding your TV's serial number, as
+   `tools/expected-device.example.txt` describes. Before it touches the TV the script reads
+   the device's serial from `http://<TV_IP>:8060/query/device-info` and stops if it differs
+   or if the file is missing; neither serial is printed.
+5. It compile-checks the sources, checks the device identity, backs up your favorites off
+   the TV, builds the ZIP archive and uploads it (the password goes to `curl` on stdin,
+   not on its command line).
 
 ## Install manually
 1. Build a ZIP from the `manifest` and `config.json` files and the `source`, `components`,
@@ -84,6 +91,22 @@ needed; whether your provider serves it is worth checking before settling for `h
 2. Open a browser on your PC and go to `http://<ROKU_IP>`.
 3. Enter the username `rokudev` and your Developer Mode password.
 4. Click **Upload**, select the ZIP, then click **Install**.
+
+## Before you push
+This repository is public, so a push is checked first. Install the hook once per clone:
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\install-hooks.ps1
+```
+For every ref you push, the hook runs `tools/check_secrets.py` over exactly the objects the
+push would upload (the whole tree of every commit, not just the diff, plus annotated tag
+objects) and refuses the push on any non-zero exit. The scan looks for the subscription
+token and playlist URL taken from your local `config.json`, for the strings listed in your
+gitignored `tools/secret-needles.txt` (copy `tools/secret-needles.example.txt`), in file
+contents, file names and commit and tag metadata; for forbidden files (`config.json`,
+`source/restore.json`, `build.zip`, any `.jpg` or `.jpeg`, because a TV screenshot can show
+the token); and for Cyrillic text outside the few files that legitimately carry provider
+data. If it cannot run (no `config.json`, no needles file) it refuses rather than passing.
+`tools\install-hooks.ps1 -Uninstall` disables the hook by renaming it.
 
 ## EPG
 The provider playlist has no embedded guide, and a full XMLTV feed is too large for the TV,

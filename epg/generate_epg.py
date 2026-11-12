@@ -48,6 +48,18 @@ MAX_DECOMPRESSED = 2 * 1024 * 1024 * 1024   # 2 GiB cap — guards against a gzi
 # Override with EPG_MIN_CHANNELS=<n> to test the guard or to handle a smaller list.
 MIN_MATCH_RATIO = 0.40
 
+# Output bounds. The feed is third-party data fetched over plain HTTP and the file it
+# produces is downloaded and parsed on a television, so every dimension of it is capped
+# here rather than trusted. The healthy file is well under 1 MB; the workflow refuses to
+# publish anything over 3,000,000 bytes as a last line of defence if one of these breaks.
+MAX_TITLE_CHARS = 120          # characters, not bytes (a Cyrillic title is 2 bytes a letter)
+MAX_PROGRAMMES_PER_CHANNEL = 80  # the earliest 80 inside the window are kept
+MAX_PROGRAMME_SPAN = 24 * 3600   # a programme longer than a day is a feed error
+
+# Counters for the bounds above, printed at the end of a run so a rule that suddenly drops
+# thousands of records is visible instead of silent.
+BOUND_DROPS = {"bad_span": 0, "title_truncated": 0, "over_cap": 0}
+
 
 class _LimitedReader:
     """Wrap a stream and abort if it yields more than `limit` bytes (decompression-bomb guard)."""
@@ -113,6 +125,31 @@ _TITLE_MAP = {
 }
 
 
+def truncate_title(t, limit=MAX_TITLE_CHARS):
+    """Cut a title to `limit` characters (counted in characters, never bytes)."""
+    if len(t) <= limit:
+        return t
+    BOUND_DROPS["title_truncated"] += 1
+    return t[:limit].rstrip()
+
+
+def span_ok(s, e):
+    """A programme must end after it starts and last at most MAX_PROGRAMME_SPAN seconds."""
+    if e <= s or e - s > MAX_PROGRAMME_SPAN:
+        BOUND_DROPS["bad_span"] += 1
+        return False
+    return True
+
+
+def cap_programmes(epg, limit=MAX_PROGRAMMES_PER_CHANNEL):
+    """Sort each channel by start time and keep the earliest `limit` programmes."""
+    for nm in epg:
+        epg[nm].sort(key=lambda p: p["s"])
+        if len(epg[nm]) > limit:
+            BOUND_DROPS["over_cap"] += len(epg[nm]) - limit
+            del epg[nm][limit:]
+
+
 def clean_title(s):
     """Strip characters the Roku font cannot draw. Returns (text, was_changed)."""
     out = []
@@ -172,8 +209,10 @@ def parse_xmltv_time(t):
         return None
 
 
-def main():
-    here = os.path.dirname(os.path.abspath(__file__))
+def main(base_dir=None):
+    # base_dir exists so a test can run the whole pipeline against a temporary folder
+    # instead of the real channels.txt / epg.json next to this file.
+    here = base_dir or os.path.dirname(os.path.abspath(__file__))
     ch_path = os.path.join(here, "channels.txt")
     out_path = os.path.join(here, "epg.json")
 
@@ -220,18 +259,19 @@ def main():
             if nm is not None:
                 s = parse_xmltv_time(el.get("start"))
                 e = parse_xmltv_time(el.get("stop"))
-                if s is not None and e is not None and e >= lo and s <= hi:
+                if (s is not None and e is not None and span_ok(s, e)
+                        and e >= lo and s <= hi):
                     title_el = el.find("title")
                     title = (title_el.text if title_el is not None else "") or ""
                     title, changed = clean_title(title)
                     if changed:
                         n_cleaned += 1
+                    title = truncate_title(title)
                     epg.setdefault(nm, []).append({"s": s, "e": e, "t": title})
                     n_prog += 1
             el.clear()
 
-    for nm in epg:
-        epg[nm].sort(key=lambda p: p["s"])
+    cap_programmes(epg)
 
     # Report BEFORE the floor check, so a REFUSED run still explains itself. Previously a
     # refusal printed only the refusal, and the timestamp counters are exactly what
@@ -241,6 +281,11 @@ def main():
     print("Matched channels with EPG: %d / %d" % (len(epg), len(names)))
     print("Programmes in window: %d" % n_prog)
     print("Titles cleaned of unrenderable characters: %d" % n_cleaned)
+    print("Dropped for a bad span (end <= start, or longer than %d s): %d"
+          % (MAX_PROGRAMME_SPAN, BOUND_DROPS["bad_span"]))
+    print("Titles truncated to %d characters: %d" % (MAX_TITLE_CHARS, BOUND_DROPS["title_truncated"]))
+    print("Dropped over the %d-per-channel cap: %d"
+          % (MAX_PROGRAMMES_PER_CHANNEL, BOUND_DROPS["over_cap"]))
     print("Failed timestamp parses: %d (absent %d, malformed %d, exception %d)"
           % (n_failed, PARSE_FAILURES["absent"], PARSE_FAILURES["malformed"],
              PARSE_FAILURES["exception"]))

@@ -12,11 +12,19 @@ So the conversion runs in GitHub Actions and the TV is served a compact `epg.jso
 ## How it works
 1. `generate_epg.py` streams the public XMLTV feed `http://epg.it999.ru/epg.xml.gz`.
 2. It matches channels from `channels.txt` (playlist names only, no tokens/subscription)
-   against XMLTV channels by normalized name (~99% match).
+   against XMLTV channels by normalized name. The match rate is about 60% on a healthy
+   run (about 508 of 844 names, the figure recorded in `generate_epg.py`), because many
+   playlist channels have no guide in that feed; the generator refuses to write a file
+   when fewer than 40% of the names match.
 3. It cuts a `now-2h .. now+18h` window and writes `epg.json`, keyed by the EXACT
-   channel name from the playlist.
+   channel name from the playlist. The output is bounded: titles are cut to 120
+   characters, a channel keeps at most its earliest 80 programmes, and a programme whose
+   end is not after its start, or which lasts more than 24 hours, is dropped. Each rule
+   prints a counter at the end of a run.
 4. The workflow `.github/workflows/epg.yml` runs the generator on a schedule (every 2
-   hours) and publishes a fresh `epg.json` to the `epg-data` branch.
+   hours) in a read-only `generate` job, hands the file to a separate `publish` job
+   through an artifact, and that job publishes it to the `epg-data` branch. The workflow
+   refuses to publish a file larger than 3,000,000 bytes.
 
 ## Use in the app
 Set the EPG URL in the IPTV player settings (or `config.json` `epgUrl`):
@@ -43,7 +51,12 @@ and the playlist URL are NOT stored.
 
 ## Manual run
 **Actions → Generate EPG → Run workflow**, or locally: `python generate_epg.py`
-(standard library only; downloads ~46 MB from epg.it999.ru).
+(needs `defusedxml`, the XML parser the generator uses; install it with
+`pip install --require-hashes -r requirements.txt`; downloads ~46 MB from epg.it999.ru).
+
+## Tests
+`python -m unittest discover epg/tests` from the repository root. They use only the
+standard library plus `defusedxml`, no network and no real feed.
 
 ## EPG source
 `epg.it999.ru` — a public XMLTV feed for Russian-language channels. To change the source,

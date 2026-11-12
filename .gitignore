@@ -31,6 +31,7 @@ Desktop.ini
 # reason channel names were stripped from the repo in TASK-15. A clone without it
 # degrades correctly: RestoreStoreIfEmpty finds no file and does nothing.
 source/restore.json
+source/restore*.json
 
 # Local agent state and isolated working trees
 .agent-memory/
@@ -50,3 +51,17 @@ node_modules/
 
 # The pre-push scanner needs the secrets to look for them. Never commit them.
 tools/secret-needles.txt
+
+# A TV screenshot can show the subscription token as pixels, so no image of the screen may
+# ever be committed. The push scanner also refuses any added .jpg/.jpeg.
+*.jpg
+*.jpeg
+
+# Store captures from the TV (favourites and recents, i.e. channel names) wherever they land.
+store-*.json
+
+# Scratch probes
+_probe/
+
+# The device serial deploy.ps1 insists on before it installs (tools/expected-device.example.txt).
+tools/expected-device.txt

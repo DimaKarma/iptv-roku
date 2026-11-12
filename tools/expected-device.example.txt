@@ -1,0 +1,5 @@
+# Copy this file to tools/expected-device.txt (that copy is gitignored) and replace the line
+# below with the serial number of YOUR television, on a single line, nothing else.
+# Find it under Settings > System > About on the TV, or in the serial-number field of
+# http://<tv address>:8060/query/device-info
+YOUR-TV-SERIAL-NUMBER

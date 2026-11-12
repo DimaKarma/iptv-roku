@@ -1,5 +1,9 @@
 param(
-    [string]$RokuIp = "192.168.5.49",
+    # The television's address. MANDATORY: there is no default and no discovery, so a
+    # deploy can never land on whatever device happened to hold an old address. Supply it
+    # as -RokuIp <address> or through the ROKU_IP environment variable. The device must
+    # also identify itself (see tools/DeviceGuard.ps1) before anything is sent to it.
+    [string]$RokuIp = $env:ROKU_IP,
     [string]$RokuPass = $env:ROKU_PASS,
     # Only for the bootstrap case: the build on the TV predates the [STORE] console
     # dump, so there is nothing to capture. Write the Favorites list down by hand
@@ -16,6 +20,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+if ([string]::IsNullOrWhiteSpace($RokuIp)) {
+    Write-Error ("Name the TV: pass -RokuIp <address> or set the ROKU_IP environment variable. " +
+                 "There is deliberately no default address and no discovery.")
+    exit 1
+}
+# host or host:port, nothing else: this string ends up in URLs and socket calls.
+# \A...\z, not ^...$: in .NET `$` also matches before a trailing newline, which would let
+# "host`n" through into URLs and socket calls.
+if ($RokuIp -notmatch '\A[A-Za-z0-9][A-Za-z0-9.\-]*(:[0-9]{1,5})?\z') {
+    Write-Error "-RokuIp / ROKU_IP must be a host name or address, optionally followed by :port."
+    exit 1
+}
+
 if ([string]::IsNullOrWhiteSpace($RokuPass)) {
     Write-Error "Set the Roku dev password via -RokuPass <pass> or the ROKU_PASS environment variable."
     exit 1
@@ -26,6 +43,7 @@ Set-Location $PSScriptRoot
 . "$PSScriptRoot\tools\StoreBackup.ps1"
 . "$PSScriptRoot\tools\Check-BrightScript.ps1"
 . "$PSScriptRoot\tools\DeployRecord.ps1"
+. "$PSScriptRoot\tools\DeviceGuard.ps1"
 $ZipName = "build.zip"
 $storePath = ""
 
@@ -89,6 +107,20 @@ if ($SkipNodeRefCheck) {
 }
 
 # ---------------------------------------------------------------------------------
+# 1c. Prove the device is the owner's television, BEFORE anything touches it. The store
+# capture below presses Home and relaunches the channel on whatever answers at the
+# address, so the identity check has to come first. The expected serial lives in the
+# gitignored tools/expected-device.txt; with no such file the deploy stops here, and the
+# message says how to create it. Neither serial is ever printed.
+# ---------------------------------------------------------------------------------
+try {
+    Assert-ExpectedDevice -RokuIp $RokuIp -ExpectedPath (Join-Path $PSScriptRoot 'tools\expected-device.txt')
+} catch {
+    Write-Error ("Refusing to deploy: " + $_.Exception.Message)
+    exit 1
+}
+
+# ---------------------------------------------------------------------------------
 # 2. Capture the store, and refresh the in-package seed from that capture.
 #
 # This runs BEFORE the package is built, and the order is the point. An install can
@@ -103,7 +135,11 @@ if ($SkipStoreBackup) {
     Write-Host "Backing up favorites and recents from $RokuIp..."
     try {
         $storePath = Save-RokuStore -RokuIp $RokuIp -OutDir (Join-Path $PSScriptRoot 'backups')
-        Update-RestoreSeed -StorePath $storePath -SeedPath (Join-Path $PSScriptRoot 'source\restore.json') | Out-Null
+        $seedOutcome = Update-RestoreSeed -StorePath $storePath -SeedPath (Join-Path $PSScriptRoot 'source\restore.json') `
+            -BackupDir (Join-Path $PSScriptRoot 'backups')
+        if ($seedOutcome -eq 'kept') {
+            Write-Host "  (the package will carry the PREVIOUS seed; see the notice above)"
+        }
     } catch {
         Write-Host "Store backup failed: $($_.Exception.Message)"
         Write-Error ("Refusing to install without a favorites backup. Write the Favorites " +
@@ -116,7 +152,19 @@ Write-Host "Removing old zip..."
 if (Test-Path $ZipName) { Remove-Item $ZipName -Force }
 
 Write-Host "Zipping files (tar, forward slashes)..."
-tar.exe -a -c -f $ZipName manifest config.json source components images
+# The Windows bsdtar by ABSOLUTE path. Resolving "tar" through PATH finds GNU tar first in
+# Git Bash, which silently writes a TAR under a .zip name and gets "Invalid or corrupt zip
+# archive" from the TV -- the failure that wiped the registry. bsdtar reports itself as such.
+$tarExe = Join-Path $env:SystemRoot 'System32\tar.exe'
+if (-not (Test-Path -LiteralPath $tarExe -PathType Leaf)) {
+    Write-Error "Windows bsdtar not found at $tarExe. The Roku was not contacted."
+    exit 1
+}
+if ((& $tarExe --version | Out-String) -notmatch 'bsdtar') {
+    Write-Error "$tarExe is not bsdtar, so it would not produce a real zip. The Roku was not contacted."
+    exit 1
+}
+& $tarExe -a -c -f $ZipName manifest config.json source components images
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Package creation failed. The Roku was not contacted."
     exit 1
@@ -132,14 +180,44 @@ try {
     # Required only when the store gate actually ran. Under -SkipStoreBackup the seed may
     # legitimately be stale or absent, and refusing there would take away the operator's
     # last escape hatch at the exact moment they reached for it.
-    Test-RokuPackageSeed -Path $ZipName -Required:(-not $SkipStoreBackup) | Out-Null
+    #
+    # With a capture of 1 or more favourites the packaged seed's favourites must equal the
+    # capture's as a list, in order: a seed one deploy behind, reordered, or empty when the TV
+    # holds favourites, is refused. With an EMPTY capture a kept previous seed passes, with a
+    # printed notice.
+    $seedArgs = @{ Path = $ZipName; Required = (-not $SkipStoreBackup) }
+    if ($storePath) { $seedArgs.StorePath = $storePath }
+    Test-RokuPackageSeed @seedArgs | Out-Null
 } catch {
     Write-Error $_.Exception.Message
     exit 1
 }
 
 Write-Host "Deploying to $RokuIp..."
-$response = curl.exe -sS --digest -u "rokudev:$RokuPass" -F "mysubmit=Install" -F "archive=@$ZipName" "http://$RokuIp/plugin_install"
+$curlExe = Join-Path $env:SystemRoot 'System32\curl.exe'
+if (-not (Test-Path -LiteralPath $curlExe -PathType Leaf)) {
+    Write-Error "curl not found at $curlExe. Nothing was uploaded."
+    exit 1
+}
+# The password reaches curl on STDIN as a config (-K -), never on the command line, where
+# it would show in the process list. ConvertTo-CurlUserConfig escapes it and refuses a line
+# break; the config itself is never printed.
+try {
+    $curlConfig = ConvertTo-CurlUserConfig -User 'rokudev' -Password $RokuPass
+} catch {
+    Write-Error $_.Exception.Message
+    exit 1
+}
+# Piping a string to a native command encodes it with $OutputEncoding. Pin it to UTF-8
+# WITHOUT a BOM for the duration of the pipe (a BOM would land inside the first config
+# line), and put the old value back afterwards whatever happens.
+$savedEncoding = $OutputEncoding
+$OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+try {
+    $response = $curlConfig | & $curlExe -sS --digest -K - -F "mysubmit=Install" -F "archive=@$ZipName" "http://$RokuIp/plugin_install"
+} finally {
+    $OutputEncoding = $savedEncoding
+}
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Deploy failed: Roku could not be reached or rejected the upload."
     exit 1
@@ -152,17 +230,24 @@ if ($LASTEXITCODE -ne 0) {
 # HTML page and printing it dumps several thousand characters.
 # The device emits one of these per message, and it emits SEVERAL -- the byte count and
 # the verdict are separate lines -- so print them all rather than the first.
-foreach ($m in [regex]::Matches($response, '<font color="red">(.*?)</font>')) {
+$responseText = [string]$response
+foreach ($m in [regex]::Matches($responseText, '<font color="red">(.*?)</font>')) {
     Write-Host "  TV: $($m.Groups[1].Value.Trim())"
 }
 
-if ($response -match "Install Failure") {
+# Get-RokuInstallVerdict checks "Identical to previous version" FIRST: that answer means the
+# package on the TV did not change, which is not a deploy whatever else the page says.
+$verdict = Get-RokuInstallVerdict -Response $responseText
+if ($verdict -eq 'identical') {
+    Write-Host "Deploy failed: the TV answered 'Identical to previous version', so the package did not change and nothing new was installed (see the TV lines above)."
+    exit 1
+} elseif ($verdict -eq 'failure') {
     Write-Host "Deploy failed: Install Failure"
     exit 1
-} elseif ($response -match "Install Success") {
+} elseif ($verdict -eq 'success') {
     Write-Host "Deploy successful!"
     Save-DeployRecord -ZipPath $ZipName -ProjectRoot $PSScriptRoot `
-        -Response $response -StorePath $storePath
+        -Response $responseText -StorePath $storePath
 } else {
     Write-Error "Deploy failed: Roku returned an unrecognized response."
     exit 1

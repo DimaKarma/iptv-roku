@@ -3,10 +3,11 @@
 # Two gaps this closes. First, deploy.ps1 deletes the old package before building the new
 # one, so there has never been a rollback target on this machine: at the time this was
 # written the only zip on disk was two months old, from a build that is not what the TV is
-# running. Second, nothing recorded WHICH build went to the device -- the manifest reports
-# 0.1.1 for every build ever made, so the version string cannot answer it and the only
-# value that exists on both the host and the box is the package md5, which the device
-# reports back in its install response and nobody was reading.
+# running. Second, nothing recorded WHICH build went to the device -- the manifest version
+# moves only when someone bumps it (it was 0.1.1 for every build until 1.0.0, and every
+# build between two releases carries the same string), so the version cannot answer it and
+# the only value that exists on both the host and the box is the package md5, which the
+# device reports back in its install response and nobody was reading.
 #
 # Everything here is best-effort by design. An archiving convenience must never turn a
 # successful install into a failed deploy, so the whole body is wrapped and any failure is

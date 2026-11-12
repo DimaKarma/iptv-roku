@@ -1,0 +1,56 @@
+name: CI
+
+# Pushes to main and pull requests aimed at main only. Read-only: nothing here publishes.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903  # v6.0.0
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+        with:
+          python-version: '3.11'
+
+      # The BrightScript compiler (brighterscript, pinned in package.json). Green means
+      # only that the sources compile: it says nothing about whether a Roku accepts the
+      # package, and it does not see string-named references (the next step does).
+      - name: Install the compiler
+        run: npm ci
+      - name: Sources exist (bsc exits 0 when its globs match nothing)
+        run: |
+          find source components -name '*.brs' | grep -q .
+          find components -name '*.xml' | grep -q .
+      - name: Compile BrightScript and SceneGraph sources
+        run: npx bsc --project bsconfig.json
+
+      - name: Resolve findNode / observeField / onChange references
+        run: python tools/check_node_refs.py
+
+      # defusedxml is the one third-party module the generator needs; install it the same
+      # hash-checked way the EPG workflow does.
+      - name: Install EPG dependencies
+        run: pip install --require-hashes -r epg/requirements.txt
+      - name: EPG generator unit tests
+        run: python -m unittest discover epg/tests
+
+      # The Pester suite (tests/*.Tests.ps1) is deliberately NOT run here. It is written
+      # for Windows PowerShell 5.1 and Pester 3.4.0 (Should Be / Should Match syntax, no
+      # -Because), it dot-sources scripts that load Windows-only .NET assemblies, and
+      # several tests run Git for Windows sh, the Windows bsdtar and powershell.exe. A
+      # hosted ubuntu runner has none of that, and which Pester version a hosted Windows
+      # runner ships is not something this file can promise. It runs locally before every
+      # deploy and push: Invoke-Pester -Path tests -PassThru from Windows PowerShell 5.1.
