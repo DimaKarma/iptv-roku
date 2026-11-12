@@ -1,18 +1,37 @@
 function getTheme()
     return {
-        colorBg:          "0x0E1310FF",
-        colorSurface:     "0x18211CFF",
-        colorSurfaceHi:   "0x212C26FF",
-        colorLine:        "0x2A362FFF",
-        colorFocus:       "0x4FB03AFF",
-        colorFocusBright: "0x74D45BFF",
+        colorBg:          "0x020B13FF",
+        colorSurface:     "0x062230FF",
+        colorSurfaceHi:   "0x0E3442FF",
+        colorLine:        "0x1D4551FF",
+        colorFocus:       "0xD5401AFF",
+        colorFocusBright: "0xFF5A2BFF",
         ' Text drawn ON the accent colour. From the brandbook's .btn.primary and
-        ' .toggle[aria-selected]; 6.86:1 on colorFocus, against 2.43:1 for colorText.
-        colorOnAccent:    "0x08130AFF",
-        colorText:        "0xECF2EEFF",
-        colorTextDim:     "0x8A968EFF",
-        colorError:       "0xD9584FFF",
+        ' .toggle[aria-selected]; white on colorFocus #D5401A is 4.59:1.
+        colorOnAccent:    "0xFFFFFFFF",
+        colorText:        "0xDCE9EEFF",
+        colorTextDim:     "0x86A6B1FF",
+        colorError:       "0xFBA60BFF",
+        colorInfo:        "0x60BBD2FF",
         spacingUnit:      12,
         focusScale:       1.05
     }
 end function
+
+' Centre a Keyboard on the 1920-wide screen at row y. Used by Search, Settings and the
+' onboarding screen: a hardcoded x put the right edge past 1920.
+' boundingRect() can report a zero width before the node has been laid out, so callers
+' run this once in init AND again when the keyboard is shown; with no usable width it
+' falls back to x=274.
+sub CenterKeyboard(kb as object, y as integer)
+    if kb = invalid then return
+    x = 274
+    r = kb.boundingRect()
+    if r <> invalid
+        if r.width > 0
+            x = Int((1920 - r.width) / 2)
+            if x < 0 then x = 0
+        end if
+    end if
+    kb.translation = [x, y]
+end sub

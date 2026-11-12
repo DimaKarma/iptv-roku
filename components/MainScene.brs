@@ -17,6 +17,8 @@ sub init()
     m.onboardingKeyboard = m.top.findNode("onboardingKeyboard")
     m.onboardingOk = m.top.findNode("onboardingOk")
     
+    ' Which screen asked for playback, so Back from the player can return there.
+    m.playOrigin = "channels"
     m.channelsScreen.observeField("playRequest", "onPlayRequest")
     m.channelsScreen.observeField("openSearch", "onOpenSearch")
     m.channelsScreen.observeField("openSettings", "onOpenSettings")
@@ -24,7 +26,7 @@ sub init()
     m.playerScreen.observeField("exitRequested", "onPlayerExit")
     
     m.searchScreen.observeField("exitRequested", "onChildScreenExit")
-    m.searchScreen.observeField("playRequest", "onPlayRequest")
+    m.searchScreen.observeField("playRequest", "onSearchPlayRequest")
     
     m.settingsScreen.observeField("exitRequested", "onChildScreenExit")
     ' Observe the TRIGGER, not the payload: repeating the same action leaves the
@@ -41,6 +43,7 @@ sub init()
     m.epgGeneratedText = ""
 
     m.onboardingOk.observeField("buttonSelected", "onOnboardingSave")
+    CenterKeyboard(m.onboardingKeyboard, 300)
     
     m.epgRefreshTimer = m.top.findNode("epgRefreshTimer")
     m.epgRefreshTimer.observeField("fire", "onEpgRefresh")
@@ -92,18 +95,21 @@ sub onConfigLoaded()
     end if
     
     if url <> ""
-        startPlaylistLoad(url, false)
+        startPlaylistLoad(url, false, false)
     else
         showOnboarding()
     end if
 end sub
 
-sub startPlaylistLoad(url as string, forceReload as boolean)
+' clearCache=true makes the task delete playlist.json, playlist_meta.json and epg.json as
+' its first step (the EPG is then fetched again by onPlaylistStatus, as after any load).
+sub startPlaylistLoad(url as string, forceReload as boolean, clearCache as boolean)
     showLoading("Loading playlist…")
     m.currentUrl = url
     m.playlistTask = CreateObject("roSGNode", "PlaylistTask")
     m.playlistTask.playlistUrl = url
     m.playlistTask.forceReload = forceReload
+    m.playlistTask.clearCache = clearCache
     m.playlistTask.observeField("status", "onPlaylistStatus")
     if m.configCache <> invalid and m.configCache.extraPlaylists <> invalid
         m.playlistTask.extraPlaylists = m.configCache.extraPlaylists
@@ -178,6 +184,7 @@ end sub
 sub showOnboarding()
     hideAllScreens()
     m.onboardingGroup.visible = true
+    CenterKeyboard(m.onboardingKeyboard, 300)
     m.onboardingKeyboard.setFocus(true)
 end sub
 
@@ -187,7 +194,7 @@ sub onOnboardingSave()
         sec = CreateObject("roRegistrySection", "settings")
         sec.Write("playlistUrl", url)
         sec.Flush()
-        startPlaylistLoad(url, false)
+        startPlaylistLoad(url, false, false)
     end if
 end sub
 
@@ -199,7 +206,16 @@ sub showChannels(res as object)
 end sub
 
 sub onPlayRequest(event as object)
-    req = event.getData()
+    m.playOrigin = "channels"
+    startPlayback(event.getData())
+end sub
+
+sub onSearchPlayRequest(event as object)
+    m.playOrigin = "search"
+    startPlayback(event.getData())
+end sub
+
+sub startPlayback(req as dynamic)
     if req <> invalid and req.channels <> invalid
         hideAllScreens()
         m.playerScreen.visible = true
@@ -214,8 +230,16 @@ end sub
 
 sub onPlayerExit()
     hideAllScreens()
-    m.channelsScreen.visible = true
-    m.channelsScreen.restoreFocus = not m.channelsScreen.restoreFocus
+    if m.playOrigin = "search"
+        ' Back to the results the viewer started from: same query, same list. The screen
+        ' is only made visible again, never reset; restoreFocus puts focus on the card
+        ' that was played.
+        m.searchScreen.visible = true
+        m.searchScreen.restoreFocus = not m.searchScreen.restoreFocus
+    else
+        m.channelsScreen.visible = true
+        m.channelsScreen.restoreFocus = not m.channelsScreen.restoreFocus
+    end if
 end sub
 
 sub onOpenSearch()
@@ -260,11 +284,12 @@ end sub
 sub onSettingsAction()
     action = m.settingsScreen.action
     if action = "refresh"
-        startPlaylistLoad(m.currentUrl, true)
+        startPlaylistLoad(m.currentUrl, true, false)
     else if action = "clearCache"
-        startPlaylistLoad(m.currentUrl, false)
+        ' Clear cache implies a forced reload.
+        startPlaylistLoad(m.currentUrl, true, true)
     else if action = "urlChanged"
-        startPlaylistLoad(m.settingsScreen.newUrl, false)
+        startPlaylistLoad(m.settingsScreen.newUrl, false, false)
     else if action = "epgChanged"
         ' The user just asked for this load, so report its outcome even if a toast
         ' has already been shown this session.
@@ -356,7 +381,7 @@ function onKeyEvent(key as string, press as boolean) as boolean
         else if key = "OK"
             if m.errorLabel.visible
                 if m.currentUrl <> invalid and m.currentUrl <> ""
-                    startPlaylistLoad(m.currentUrl, false)
+                    startPlaylistLoad(m.currentUrl, false, false)
                     handled = true
                 else
                     runConfigTask()

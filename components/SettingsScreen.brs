@@ -7,8 +7,10 @@ sub init()
     m.keyboardBg = m.top.findNode("keyboardBg")
     m.keyboard = m.top.findNode("keyboard")
     m.keyboardHint = m.top.findNode("keyboardHint")
-    m.keyboardOk = m.top.findNode("keyboardOk")
-    m.keyboardCancel = m.top.findNode("keyboardCancel")
+    m.saveCancelList = m.top.findNode("saveCancelList")
+    ' The Diagnostics screen is created on first use (never a static child, no probe code
+    ' in any init) and then reused.
+    m.diag = invalid
     
     m.toastBg = m.top.findNode("toastBg")
     m.toastLabel = m.top.findNode("toastLabel")
@@ -16,8 +18,7 @@ sub init()
     
     m.settingsList.observeField("itemSelected", "onItemSelected")
     m.settingsList.observeField("itemFocused", "onItemFocused")
-    m.keyboardOk.observeField("buttonSelected", "onKeyboardSave")
-    m.keyboardCancel.observeField("buttonSelected", "onKeyboardCancel")
+    m.saveCancelList.observeField("itemSelected", "onSaveCancelSelected")
     m.toastTimer.observeField("fire", "hideToast")
     m.top.observeField("visible", "onVisibleChange")
     m.top.observeField("noticeCommand", "onNotice")
@@ -29,15 +30,22 @@ sub init()
         m.settingsList.focusedColor = theme.colorOnAccent
         m.infoLabel.color = theme.colorTextDim
         m.keyboardHint.color = theme.colorText
+        m.saveCancelList.color = theme.colorTextDim
+        m.saveCancelList.focusedColor = theme.colorOnAccent
         m.toastBg.color = theme.colorSurface
         m.toastLabel.color = theme.colorText
     end if
     
+    buildSaveCancel()
+    CenterKeyboard(m.keyboard, 200)
     buildList()
 end sub
 
 sub onVisibleChange()
-    if m.top.visible then m.settingsList.setFocus(true)
+    if m.top.visible
+        if m.diag <> invalid then m.diag.visible = false
+        m.settingsList.setFocus(true)
+    end if
 end sub
 
 sub onInfoChange()
@@ -45,50 +53,79 @@ sub onInfoChange()
     updateInfo()
 end sub
 
+' ONE place builds both the titles and the actions they trigger, in parallel lists,
+' like buildErrorOptions in PlayerScreen. Dispatch (onItemSelected) and the info pane
+' (updateInfo) read m.settingsActions, never a literal row number, so adding or moving a
+' row cannot silently re-aim another row's handler.
 sub buildList()
     content = CreateObject("roSGNode", "ContentNode")
+    m.settingsActions = []
     
-    addItem(content, "Playlist URL")
-    addItem(content, "Refresh playlist now")
-    addItem(content, "URL EPG")
-    addItem(content, "Clear cache")
-    addItem(content, "About")
+    addItem(content, "Playlist URL", "url")
+    addItem(content, "Refresh playlist now", "refresh")
+    addItem(content, "URL EPG", "epg")
+    addItem(content, "Clear cache", "clearCache")
+    addItem(content, "About", "about")
+    addItem(content, "Diagnostics", "diagnostics")
     
     m.settingsList.content = content
 end sub
 
-sub addItem(parent as object, title as string)
+sub addItem(parent as object, title as string, action as string)
+    item = parent.createChild("ContentNode")
+    item.title = title
+    m.settingsActions.Push(action)
+end sub
+
+' Two rows, Save first. Rebuilt each time the keyboard opens so the cursor starts on Save.
+sub buildSaveCancel()
+    content = CreateObject("roSGNode", "ContentNode")
+    addSaveCancelRow(content, "Save")
+    addSaveCancelRow(content, "Cancel")
+    m.saveCancelList.content = content
+end sub
+
+sub addSaveCancelRow(parent as object, title as string)
     item = parent.createChild("ContentNode")
     item.title = title
 end sub
 
+function actionAt(idx as integer) as string
+    if m.settingsActions = invalid then return ""
+    if idx < 0 or idx >= m.settingsActions.Count() then return ""
+    return m.settingsActions[idx]
+end function
+
 sub updateInfo()
     idx = m.settingsList.itemFocused
     info = m.top.info
+    act = actionAt(idx)
     
     text = ""
-    if idx = 0 ' URL
+    if act = "url"
         if info <> invalid and info.playlistUrl <> invalid
             text = "Current URL:" + chr(10) + info.playlistUrl
         else
             text = "URL not set"
         end if
-    else if idx = 1 ' Refresh
+    else if act = "refresh"
         text = "Force a full playlist reload"
-    else if idx = 2 ' EPG
+    else if act = "epg"
         if info <> invalid and info.epgUrl <> invalid and info.epgUrl <> ""
             text = "Current EPG URL:" + chr(10) + info.epgUrl
         else
             text = "EPG URL not set"
         end if
-    else if idx = 3 ' Cache
+    else if act = "clearCache"
         text = "Delete cached playlist data and metadata."
-    else if idx = 4 ' About
+    else if act = "diagnostics"
+        text = "Probes for the keyboard and for what this device allows." + chr(10) + "Results go to the debug console."
+    else if act = "about"
         ' Kept in step with the manifest by tests/BrightScript.Lint.Tests.ps1.
         ' roAppInfo would read it at runtime, but nothing in this project uses that
         ' object yet and rule 20 shows some CreateObject types fault on the render
         ' thread - which a Settings screen is. Not worth an install to find out.
-        text = "IPTV Player v1.0" + chr(10)
+        text = "IPTV Player v1.1" + chr(10)
         text = text + "Made for people. Completely free. Install and watch." + chr(10) + chr(10)
         if info <> invalid
             if info.channelCount <> invalid then text = text + "Channels: " + info.channelCount.ToStr() + chr(10)
@@ -123,9 +160,9 @@ sub onItemFocused()
 end sub
 
 sub onItemSelected()
-    idx = m.settingsList.itemSelected
+    act = actionAt(m.settingsList.itemSelected)
     
-    if idx = 0 ' URL
+    if act = "url"
         info = m.top.info
         if info <> invalid and info.playlistUrl <> invalid
             m.keyboard.text = info.playlistUrl
@@ -133,12 +170,10 @@ sub onItemSelected()
             m.keyboard.text = ""
         end if
         m.editMode = "playlist"
-        m.keyboardHint.text = "Enter a new playlist URL"
-        m.keyboardBg.visible = true
-        m.keyboard.setFocus(true)
-    else if idx = 1 ' Refresh
+        showKeyboard("Enter a new playlist URL")
+    else if act = "refresh"
         sendAction("refresh")
-    else if idx = 2 ' EPG
+    else if act = "epg"
         info = m.top.info
         if info <> invalid and info.epgUrl <> invalid
             m.keyboard.text = info.epgUrl
@@ -146,31 +181,76 @@ sub onItemSelected()
             m.keyboard.text = ""
         end if
         m.editMode = "epg"
-        m.keyboardHint.text = "Enter a new EPG URL"
-        m.keyboardBg.visible = true
-        m.keyboard.setFocus(true)
-    else if idx = 3 ' Cache
-        fs = CreateObject("roFileSystem")
-        if fs.Exists("cachefs:/playlist.json")
-            fs.Delete("cachefs:/playlist.json")
-        end if
-        if fs.Exists("cachefs:/playlist_meta.json")
-            fs.Delete("cachefs:/playlist_meta.json")
-        end if
-        if fs.Exists("cachefs:/epg.json")
-            fs.Delete("cachefs:/epg.json")
-        end if
+        showKeyboard("Enter a new EPG URL")
+    else if act = "clearCache"
+        ' The deletion itself happens in PlaylistTask (clearCache), off the render thread.
         showToast("Cache cleared")
         sendAction("clearCache")
-    else if idx = 4 ' About
+    else if act = "diagnostics"
+        openDiagnostics()
+    else if act = "about"
         ' Do nothing
     end if
 end sub
 
+sub showKeyboard(hint as string)
+    m.keyboardHint.text = hint
+    m.keyboardBg.visible = true
+    ' Again here: boundingRect() can be zero before the first layout.
+    CenterKeyboard(m.keyboard, 200)
+    positionSaveCancel()
+    buildSaveCancel()
+    m.keyboard.setFocus(true)
+end sub
+
+' Under the keyboard, centred. Falls back to y=560 without a usable bounding rect.
+sub positionSaveCancel()
+    y = 560
+    r = m.keyboard.boundingRect()
+    if r <> invalid
+        if r.height > 0 then y = 200 + Int(r.height) + 24
+    end if
+    if y > 860 then y = 860
+    m.saveCancelList.translation = [760, y]
+end sub
+
+sub closeKeyboard()
+    m.keyboardBg.visible = false
+    m.keyboard.setFocus(false)
+    m.saveCancelList.setFocus(false)
+    m.settingsList.setFocus(true)
+end sub
+
+sub onSaveCancelSelected()
+    idx = m.saveCancelList.itemSelected
+    if idx = 0
+        onKeyboardSave()
+    else
+        onKeyboardCancel()
+    end if
+end sub
+
+sub openDiagnostics()
+    if m.diag = invalid
+        m.diag = CreateObject("roSGNode", "DiagnosticsScreen")
+        if m.diag = invalid
+            showToast("Diagnostics unavailable")
+            return
+        end if
+        m.diag.observeField("exitRequested", "onDiagExit")
+        m.top.appendChild(m.diag)
+    end if
+    m.diag.visible = true
+    m.diag.openCommand = not m.diag.openCommand
+end sub
+
+sub onDiagExit()
+    m.settingsList.setFocus(true)
+end sub
+
 sub onKeyboardSave()
     url = m.keyboard.text
-    m.keyboardBg.visible = false
-    m.settingsList.setFocus(true)
+    closeKeyboard()
     
     sec = CreateObject("roRegistrySection", "settings")
     if m.editMode = "epg"
@@ -187,33 +267,28 @@ sub onKeyboardSave()
 end sub
 
 sub onKeyboardCancel()
-    m.keyboardBg.visible = false
-    m.settingsList.setFocus(true)
+    closeKeyboard()
 end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
     handled = false
+    ' While Diagnostics is up it owns the keys (it handles its own Back).
+    if m.diag <> invalid
+        if m.diag.visible then return false
+    end if
     if press
         if m.keyboardBg.visible
-            if key = "down"
-                if m.keyboard.hasFocus()
-                    m.keyboardOk.setFocus(true)
-                    handled = true
-                else if m.keyboardOk.hasFocus()
-                    m.keyboardCancel.setFocus(true)
-                    handled = true
+            ' Rule 8: the Keyboard swallows every arrow, so the only key that reaches
+            ' here from it is Back. Back from the keyboard moves to Save / Cancel; Back
+            ' from that list discards.
+            if key = "back"
+                if m.saveCancelList.hasFocus()
+                    onKeyboardCancel()
+                else
+                    m.keyboard.setFocus(false)
+                    m.saveCancelList.jumpToItem = 0
+                    m.saveCancelList.setFocus(true)
                 end if
-            else if key = "up"
-                if m.keyboardCancel.hasFocus()
-                    m.keyboardOk.setFocus(true)
-                    handled = true
-                else if m.keyboardOk.hasFocus()
-                    m.keyboard.setFocus(true)
-                    handled = true
-                end if
-            else if key = "back"
-                m.keyboardBg.visible = false
-                m.settingsList.setFocus(true)
                 handled = true
             end if
         else

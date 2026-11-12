@@ -9,14 +9,14 @@
     </interface>
     
     <children>
-        <Rectangle id="background" width="330" height="220" color="0x18211CFF" />
+        <Rectangle id="background" width="330" height="220" color="0x062230FF" />
 
         <!-- Tile, inset 12px so it reads as content INSIDE a card. Full-bleed artwork
              was the problem on Sport2, where broadcaster logos sit on solid white: the
              slabs ran to the card edge and were the brightest thing on screen at
              18.76:1 against the page, brighter than any brand element. -->
-        <Rectangle id="fallbackBg" width="306" height="132" translation="[12, 12]" color="0x18211CFF">
-            <Label id="fallbackLabel" width="306" height="132" horizAlign="center" vertAlign="center" text="" color="0xECF2EEFF" />
+        <Rectangle id="fallbackBg" width="306" height="132" translation="[12, 12]" color="0x062230FF">
+            <Label id="fallbackLabel" width="306" height="132" horizAlign="center" vertAlign="center" text="" color="0xDCE9EEFF" />
         </Rectangle>
 
         <!-- Real logo. Same box as the tile: three nodes are the tile and they must move
@@ -24,7 +24,7 @@
         <Poster id="logo" width="306" height="132" translation="[12, 12]" loadDisplayMode="scaleToFit" visible="false" />
 
         <!-- Error icon/dot for incompatible -->
-        <Rectangle id="errorBadge" width="24" height="24" translation="[286, 20]" color="0xD9584FFF" visible="false" />
+        <Rectangle id="errorBadge" width="24" height="24" translation="[286, 20]" color="0xFBA60BFF" visible="false" />
 
         <!-- Dimmer for incompatible -->
         <Rectangle id="dimmer" width="330" height="220" color="0x00000088" visible="false" />
@@ -33,14 +33,14 @@
              advance, so the label was truncated and rendered as an ellipsis on every card
              in Favorites. ZapperCard declares the same star with no size and draws it
              correctly. -->
-        <Label id="favStar" text="★" translation="[20, 20]" color="0x74D45BFF" visible="false" />
+        <Label id="favStar" text="★" translation="[20, 20]" color="0x60BBD2FF" visible="false" />
 
         <!-- Name -->
-        <Label id="nameLabel" translation="[12, 150]" width="306" height="30" wrap="false" color="0xECF2EEFF" />
+        <Label id="nameLabel" translation="[12, 150]" width="306" height="30" wrap="false" color="0xDCE9EEFF" />
 
         <!-- Programme line. Labels do NOT clip to their declared height here - the glyphs
              overflow downward, and at y=190 they reached y=219, flush against the card's
              last pixel. At 180 they end at 207 with 13px of card left below. -->
-        <Label id="epgLabel" translation="[12, 180]" width="306" height="20" wrap="false" color="0x8A968EFF" text="" />
+        <Label id="epgLabel" translation="[12, 180]" width="306" height="20" wrap="false" color="0x86A6B1FF" text="" />
     </children>
 </component>

@@ -26,6 +26,8 @@ sub init()
     m.toastTimer = m.top.findNode("toastTimer")
     m.clockTimer = m.top.findNode("clockTimer")
     m.okTimer = m.top.findNode("okTimer")
+    m.stallTimer = m.top.findNode("stallTimer")
+    m.recentTimer = m.top.findNode("recentTimer")
     
     m.zapLine2 = m.top.findNode("zapLine2")
     m.zapUntil = m.top.findNode("zapUntil")
@@ -41,12 +43,27 @@ sub init()
     m.toastTimer.observeField("fire", "hideToast")
     m.clockTimer.observeField("fire", "updateClock")
     m.okTimer.observeField("fire", "onOkLongPress")
+    m.stallTimer.observeField("fire", "onStallTimeout")
+    m.recentTimer.observeField("fire", "onRecentTimer")
     
     m.zapperGrid.observeField("itemSelected", "onZapperSelected")
     m.zapperGrid.observeField("itemFocused", "onZapperFocused")
     m.zapperTimer.observeField("fire", "closeZapper")
     
     m.okLongFired = false
+    ' True only between an OK PRESS that this screen saw and its release. The release is
+    ' acted on only when armed: a press that went to another node (the error dialog's
+    ' list, the zapper) must not turn its release into an action here.
+    m.okArmed = false
+    ' Stall watchdog and delayed Recent. hasPlayed: a `playing` was seen since the last
+    ' playIndex. recentPending: the Recent timer is still to be armed by that `playing`.
+    ' recentName: the channel the Recent timer was armed for (invalid = adult group).
+    m.hasPlayed = false
+    m.recentPending = false
+    m.recentName = invalid
+    ' False once the player was left. A late `error` or `finished` from the stopped video
+    ' must not open the dialog and take focus from the screen that now has it.
+    m.active = false
     
     m.errorOptions.observeField("itemSelected", "onErrorOptionSelected")
     
@@ -88,6 +105,7 @@ sub playIndex(idx as integer)
     if idx < 0 or idx >= m.top.playlist.Count() return
     
     m.currentIndex = idx
+    m.active = true
     channel = m.top.playlist[idx]
     
     node = CreateObject("roSGNode", "ContentNode")
@@ -98,9 +116,18 @@ sub playIndex(idx as integer)
     m.video.content = node
     m.video.control = "play"
     
-    if not IsAdultGroup(channel.group)
-        PushRecent(channel.name)
+    ' Recent is no longer written here: a zap through ten channels used to push all ten.
+    ' It is written by recentTimer, 10 s after the first `playing` of THIS channel. The
+    ' adult-group exclusion is applied here, when the name is captured.
+    disarmRecentTimer()
+    m.hasPlayed = false
+    m.recentPending = true
+    if IsAdultGroup(channel.group)
+        m.recentName = invalid
+    else
+        m.recentName = channel.name
     end if
+    armStallWatchdog(20.0)
     
     m.errorDialog.visible = false
     
@@ -127,15 +154,79 @@ sub onVideoStateChange()
         else
             m.loadingLabel.text = "Loading…"
         end if
+        ' A buffering AFTER playing restarts the watchdog at 30 s. The first buffering of
+        ' a new channel keeps the 20 s one that playIndex armed.
+        if m.hasPlayed then armStallWatchdog(30.0)
     else if state = "playing"
         m.spinner.visible = false
         m.spinnerAnim.control = "stop"
         m.loadingLabel.visible = false
+        disarmStallWatchdog()
+        m.hasPlayed = true
+        if m.recentPending
+            m.recentPending = false
+            armRecentTimer()
+        end if
     else if state = "error"
-        m.spinner.visible = false
-        m.spinnerAnim.control = "stop"
-        m.loadingLabel.visible = false
-        showErrorDialog()
+        failPlayback("Couldn't play this stream.")
+    else if state = "finished"
+        ' A `finished` from the OUTGOING stream can land after playIndex started the next
+        ' one. Until the current stream has reached `playing` it is not ours to act on.
+        if not m.hasPlayed then return
+        ' A live stream that ends is a failure from the viewer's side.
+        failPlayback("The stream ended.")
+    end if
+end sub
+
+' Common tail of `error`, `finished` and a watchdog fire: nothing may fire later for
+' this channel, the spinner goes, the dialog opens.
+sub failPlayback(reason as string)
+    if not m.active then return
+    disarmStallWatchdog()
+    disarmRecentTimer()
+    m.spinner.visible = false
+    m.spinnerAnim.control = "stop"
+    m.loadingLabel.visible = false
+    showErrorDialog(reason)
+end sub
+
+' (Re)start the stall watchdog. Stop, set, start: assigning duration to a running timer
+' is unreliable (see showMiniBanner).
+sub armStallWatchdog(seconds as float)
+    m.stallTimer.control = "stop"
+    m.stallTimer.duration = seconds
+    m.stallTimer.control = "start"
+end sub
+
+sub disarmStallWatchdog()
+    m.stallTimer.control = "stop"
+end sub
+
+' The stream never reached `playing` in time (or stalled after it): stop it, then the
+' same dialog as a hard error.
+sub onStallTimeout()
+    m.video.control = "stop"
+    failPlayback("Stream is not responding.")
+end sub
+
+sub armRecentTimer()
+    m.recentTimer.control = "stop"
+    m.recentTimer.duration = 10.0
+    m.recentTimer.control = "start"
+end sub
+
+' Also forgets the pending state, so a later `playing` of the SAME channel (after a
+' stall, say) cannot arm a timer that playIndex or exitPlayer already cancelled.
+sub disarmRecentTimer()
+    m.recentTimer.control = "stop"
+    m.recentPending = false
+end sub
+
+' Fires 10 s after playback started: the channel it was armed for goes into Recent.
+sub onRecentTimer()
+    if m.recentName <> invalid
+        PushRecent(m.recentName)
+        m.recentName = invalid
     end if
 end sub
 
@@ -174,8 +265,21 @@ function buildErrorOptions() as object
     return c
 end function
 
-sub showErrorDialog()
-    m.errorMsg.text = "Couldn't play this stream."
+sub showErrorDialog(reason as string)
+    m.okTimer.control = "stop"
+    m.okArmed = false
+    ' The dialog is about to take focus, so nothing else may be holding it or running.
+    disarmStallWatchdog()
+    ' The zapper panel can be open (select a dead channel in it, wait, and its 5 s timer
+    ' used to take the focus back from this list). closeZapper() BEFORE the dialog takes
+    ' focus, never after: it ends in focusPlayer(), which would steal it.
+    closeZapper()
+    msg = reason
+    code = m.video.errorCode
+    if code <> invalid
+        if code <> 0 then msg = msg + " (code " + code.ToStr() + ")"
+    end if
+    m.errorMsg.text = msg
     m.errorOptions.content = buildErrorOptions()
     m.errorDialog.visible = true
     m.errorOptions.setFocus(true)
@@ -382,12 +486,20 @@ sub zap(stepDelta as integer)
 end sub
 
 sub exitPlayer()
+    m.okTimer.control = "stop"
+    m.okArmed = false
+    disarmStallWatchdog()
+    disarmRecentTimer()
+    m.hasPlayed = false
+    m.active = false
     m.video.control = "stop"
     m.errorDialog.visible = false
     m.top.exitRequested = not m.top.exitRequested
 end sub
 
 sub openZapper()
+    m.okTimer.control = "stop"
+    m.okArmed = false
     if m.top.playlist = invalid or m.top.playlist.Count() = 0 then return
     ' Time the rebuild. This runs on the render thread, so it must be the GLOBAL Uptime()
     ' and never CreateObject("roTimespan") -- that is a MAIN|TASK-only component and rule
@@ -493,17 +605,19 @@ function onKeyEvent(key as string, press as boolean) as boolean
         if key = "OK"
             if press
                 m.okLongFired = false
+                m.okArmed = true
                 m.okTimer.control = "start"
                 handled = true
             else
                 m.okTimer.control = "stop"
-                if m.okLongFired = false
+                if m.okArmed and m.okLongFired = false
                     if m.overlayGroup.visible
                         hideOverlay()
                     else
                         showOverlay()
                     end if
                 end if
+                m.okArmed = false
                 handled = true
             end if
         else if press

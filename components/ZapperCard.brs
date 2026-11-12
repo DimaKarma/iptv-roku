@@ -74,7 +74,7 @@ function getColorFromHash(name as string) as string
     for i = 1 to Len(name)
         hash = hash + Asc(Mid(name, i, 1))
     end for
-    colors = ["0x2F6E4EFF", "0x3C6E86FF", "0x6E7D3AFF", "0x7A5C3EFF", "0x4E6E6EFF", "0x5B4E7AFF", "0x6E3E4EFF", "0x3E7A66FF"]
+    colors = ["0x1F5566FF", "0x2A6F7EFF", "0x35607AFF", "0x4A5E73FF", "0x4B6664FF", "0x6E5A4CFF", "0x7C4A38FF", "0x3F6E5EFF"]
     idx = hash MOD colors.Count()
     return colors[idx]
 end function

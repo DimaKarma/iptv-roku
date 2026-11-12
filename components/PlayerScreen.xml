@@ -15,7 +15,7 @@
         <!-- enableUI="false": this app draws its own player UI (the zap banner, the OK
              overlay with the channel name and clock, the error dialog), and Roku's
              built-in one duplicated all of it, including a white buffering spinner
-             next to our green one, and a second title and clock along the top edge.
+             next to our own one, and a second title and clock along the top edge.
              Trickplay is irrelevant here: these are live streams, there is nothing to
              seek. Per the Roku docs this hides "most of" the Video node UI, so whether
              the white spinner is included has to be confirmed on the device. -->
@@ -43,7 +43,7 @@
         <Label id="loadingLabel"
                translation="[0, 560]"
                width="1920" horizAlign="center"
-               color="0xECF2EEFF" visible="false" />
+               color="0xDCE9EEFF" visible="false" />
                
         <!-- Overlay (OK button) -->
         <!-- Anchored to the bottom edge, but 224 tall instead of 180 and starting
@@ -58,20 +58,20 @@
             <Label id="overlayName"
                    translation="[100, 30]"
                    width="1400" height="60"
-                   color="0xECF2EEFF" />
+                   color="0xDCE9EEFF" />
             <Label id="overlayGroupLabel"
                    translation="[100, 100]"
                    width="1400" height="40"
-                   color="0x8A968EFF" />
+                   color="0x86A6B1FF" />
             <Label id="overlayTime"
                    translation="[1500, 30]"
                    width="300" height="60"
                    horizAlign="right"
-                   color="0xECF2EEFF" />
+                   color="0xDCE9EEFF" />
             <Label id="overlayEpg"
                    translation="[100, 140]"
                    width="1720" height="30"
-                   color="0x8A968EFF" text="" />
+                   color="0x86A6B1FF" text="" />
         </Rectangle>
         
         <!-- Mini-banner (Zap). Left-anchored on the app's x=96 spine: a centred
@@ -85,27 +85,27 @@
         <Rectangle id="miniBanner"
                    width="1040" height="132"
                    translation="[96, 856]"
-                   color="0x0E1310E6"
+                   color="0x020B13E6"
                    visible="false">
             <!-- L-bracket, upright -->
             <Rectangle id="zapSpine"
                        width="4" height="132"
                        translation="[0, 0]"
-                       color="0x4FB03AFF" />
+                       color="0xD5401AFF" />
 
             <Label id="miniBannerLabel"
                    translation="[28, 24]"
                    width="984" height="44"
                    horizAlign="left" vertAlign="center"
                    wrap="false"
-                   color="0xECF2EEFF" />
+                   color="0xDCE9EEFF" />
 
             <Label id="zapLine2"
                    translation="[28, 72]"
                    width="736" height="36"
                    horizAlign="left" vertAlign="center"
                    wrap="false"
-                   color="0xECF2EEFF" />
+                   color="0xDCE9EEFF" />
 
             <!-- Right-aligned, so the scale pivot is its RIGHT edge (224), not its
                  centre - pivoting at the centre would drift the shrunken text away
@@ -117,7 +117,7 @@
                    wrap="false"
                    scale="[0.8, 0.8]"
                    scaleRotateCenter="[224, 18]"
-                   color="0x8A968EFF" />
+                   color="0x86A6B1FF" />
 
             <!-- L-bracket, foot: elapsed fraction of the current programme. Flush
                  with the panel edge and with no track behind it, so when there is no
@@ -125,7 +125,7 @@
             <Rectangle id="zapProgress"
                        width="0" height="4"
                        translation="[0, 128]"
-                       color="0x4FB03AFF"
+                       color="0x60BBD2FF"
                        visible="false" />
         </Rectangle>
         
@@ -133,30 +133,30 @@
         <Rectangle id="errorDialog"
                    width="800" height="470"
                    translation="[560, 305]"
-                   color="0x18211CFF"
+                   color="0x062230FF"
                    visible="false">
             <Label id="errorTitle"
                    text="Playback error"
                    translation="[0, 40]"
                    width="800" horizAlign="center"
-                   color="0xECF2EEFF" />
+                   color="0xDCE9EEFF" />
             <Label id="errorMsg"
                    translation="[50, 120]"
                    width="700" height="80"
                    horizAlign="center" wrap="true"
-                   color="0x8A968EFF" />
+                   color="0x86A6B1FF" />
                    
             <!-- Same treatment as the category rail: the stock focus chip is #D3D3D3 and
                  anything readable is unreadable on it. Measured on the device before this
                  change, the selected option's text was #D8D8D8 on a #D3D3D3 chip - the
                  label all but vanished at the one moment the user needs to act. The blend
-                 multiplies the stock bitmap to the brand green; the text is on-accent. -->
+                 multiplies the stock bitmap to the accent #D5401A; the text is on-accent. -->
             <LabelList id="errorOptions"
                        translation="[200, 220]"
                        itemSize="[400, 50]"
-                       color="0x8A968EFF"
-                       focusedColor="0x08130AFF"
-                       focusBitmapBlendColor="0x5FD345FF" />
+                       color="0x86A6B1FF"
+                       focusedColor="0xFFFFFFFF"
+                       focusBitmapBlendColor="0xFF4D1FFF" />
         </Rectangle>
         
         <!-- Toast for favorites -->
@@ -166,12 +166,12 @@
         <Rectangle id="toastBg"
                    translation="[460, 784]"
                    width="1000" height="60"
-                   color="0x18211CCC"
+                   color="0x062230CC"
                    visible="false">
             <Label id="toastLabel"
                    width="1000" height="60"
                    horizAlign="center" vertAlign="center"
-                   color="0xECF2EEFF" />
+                   color="0xDCE9EEFF" />
         </Rectangle>
         
         <Timer id="overlayTimer" duration="5.0" repeat="false" />
@@ -179,6 +179,12 @@
         <Timer id="toastTimer" duration="2.5" repeat="false" />
         <Timer id="clockTimer" duration="30.0" repeat="true" />
         <Timer id="okTimer" duration="0.8" repeat="false" />
+        <!-- stallTimer: stall watchdog, (re)started by armStallWatchdog (20 s from a new
+             channel, 30 s after a buffering that follows playing). recentTimer: Recent is
+             written 10 s after playback really starts. Both are driven only through the
+             arm/disarm subs in PlayerScreen.brs. -->
+        <Timer id="stallTimer" duration="20.0" repeat="false" />
+        <Timer id="recentTimer" duration="10.0" repeat="false" />
         
         <!-- Zapper panel (vertical list on the right) -->
         <Rectangle id="zapperPanel"

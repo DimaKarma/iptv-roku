@@ -3,63 +3,75 @@
     <script type="text/brightscript" uri="pkg:/components/SearchScreen.brs" />
     <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
     <script type="text/brightscript" uri="pkg:/source/ChannelStore.brs" />
+    <script type="text/brightscript" uri="pkg:/source/Translit.brs" />
     <interface>
         <field id="channels" type="array" onChange="onChannelsChange" />
         <field id="playRequest" type="assocarray" />
         <field id="exitRequested" type="boolean" />
+        <!-- Toggled by MainScene when the player is left: focus goes to the card that
+             was played. A toggle, because an observer only fires on CHANGE. -->
+        <field id="restoreFocus" type="boolean" onChange="onRestoreFocus" />
     </interface>
 
     <children>
-        <Button id="searchButton" 
-                translation="[96, 54]" 
-                minWidth="800" 
-                text="Search: (press OK)" />
-                
-        <Label id="hintLabel"
-               translation="[96, 130]"
-               color="0x8A968EFF"
-               width="800"
-               wrap="true"
-               text="OK opens the keyboard. Back exits. From the keyboard, Back returns to results." />
-               
+        <!-- The search field. Drawn here rather than a stock Button: this Group itself
+             holds focus while the field is selected (so Down, OK and Back all reach
+             onKeyEvent reliably) and fieldBg / fieldLabel show the accent focus state.
+             The same two colours as the rail chip: 0xD5401A with on-accent text. -->
+        <Rectangle id="fieldBg"
+                   translation="[96, 54]"
+                   width="800"
+                   height="64"
+                   color="0x062230FF" />
+        <Label id="fieldLabel"
+               translation="[120, 54]"
+               width="752"
+               height="64"
+               vertAlign="center"
+               wrap="false"
+               color="0x86A6B1FF"
+               text="Search: press OK to type" />
+
         <Label id="headerLabel"
-               translation="[96, 180]"
-               color="0xECF2EEFF"
-               width="800"
+               translation="[96, 140]"
+               color="0xDCE9EEFF"
+               width="1698"
                height="40" />
-               
+
         <!-- Same ChannelCard, so the same focus treatment: without the blend this screen
-             would keep the stock white ring while the Channels grid went green. -->
+             would keep the stock white ring while the Channels grid went accent-coloured.
+             Five columns from the x=96 spine: 96 + 5*330 + 4*12 = 1794. -->
         <MarkupGrid id="channelGrid"
-                    translation="[96, 220]"
+                    translation="[96, 200]"
                     itemComponentName="ChannelCard"
                     itemSize="[330, 220]"
                     itemSpacing="[12, 12]"
-                    numColumns="4"
+                    numColumns="5"
                     numRows="3"
-                    focusBitmapBlendColor="0x57C140FF" />
-                    
+                    focusBitmapBlendColor="0xEB461DFF" />
+
         <Label id="statusLabel"
-               translation="[96, 400]"
-               width="1300"
+               translation="[96, 420]"
+               width="1698"
                horizAlign="center"
-               color="0x8A968EFF"
-               text="Type at least 2 characters" />
-               
+               color="0x86A6B1FF"
+               text="" />
+
+        <!-- The keyboard's x is set at runtime (CenterKeyboard in init and when shown). -->
         <Rectangle id="keyboardBg"
                    width="1920"
                    height="1080"
-                   color="0x0E1310E6"
+                   color="0x020B13E6"
                    visible="false">
             <Label id="keyboardHint"
-                   translation="[700, 200]"
-                   width="600"
+                   translation="[0, 200]"
+                   width="1920"
                    horizAlign="center"
-                   color="0xECF2EEFF"
-                   text="Type to search. Back returns to results." />
-            <Keyboard id="keyboard" translation="[700, 250]" />
+                   color="0xDCE9EEFF"
+                   text="Type to search. Back shows results." />
+            <Keyboard id="keyboard" translation="[274, 250]" />
         </Rectangle>
-               
+
         <!-- Toast -->
         <!-- 920, matching ChannelsScreen. At 950 the 60px-high toast ended at 1010,
              70px from the panel edge against a 90px advisory margin - the same defect
@@ -68,16 +80,16 @@
                    translation="[460, 920]"
                    width="1000"
                    height="60"
-                   color="0x18211CFF"
+                   color="0x062230FF"
                    visible="false">
             <Label id="toastLabel"
                    width="1000"
                    height="60"
                    horizAlign="center"
                    vertAlign="center"
-                   color="0xECF2EEFF" />
+                   color="0xDCE9EEFF" />
         </Rectangle>
-        
+
         <Timer id="searchTimer" duration="0.3" repeat="false" />
         <Timer id="toastTimer" duration="2.5" repeat="false" />
     </children>

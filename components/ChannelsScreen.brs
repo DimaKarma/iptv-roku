@@ -20,7 +20,7 @@ sub init()
     theme = getTheme()
     if theme <> invalid
         m.categoryList.color = theme.colorTextDim
-        ' On-accent, because the chip underneath is now brand green (see the
+        ' On-accent, because the chip underneath is now the accent colour (see the
         ' focusBitmapBlendColor on categoryList). This line used to set colorText, which
         ' overwrote the XML value and left off-white on the stock grey chip at 1.29:1.
         m.categoryList.focusedColor = theme.colorOnAccent
@@ -45,6 +45,10 @@ sub init()
     m.okTimer = m.top.findNode("okTimer")
     m.okTimer.observeField("fire", "onOkLongPress")
     m.okLongFired = false
+    ' True only between an OK PRESS this screen saw on the grid and its release. A press
+    ' that went elsewhere (the player's error dialog, whose "Back" row hands focus to the
+    ' grid) must not turn its RELEASE into playFocusedChannel() here.
+    m.okArmed = false
 end sub
 
 sub rebuildFavSet()
@@ -324,11 +328,13 @@ function onKeyEvent(key as string, press as boolean) as boolean
     if key = "OK" and m.channelGrid.hasFocus()
         if press
             m.okLongFired = false
+            m.okArmed = true
             m.okTimer.control = "stop"
             m.okTimer.control = "start"
         else
             m.okTimer.control = "stop"
-            if not m.okLongFired then playFocusedChannel()
+            if m.okArmed and not m.okLongFired then playFocusedChannel()
+            m.okArmed = false
         end if
         return true
     end if
@@ -392,6 +398,7 @@ sub hideToast()
 end sub
 
 sub onRestoreFocus()
+    m.okArmed = false
     refreshFavState(true)
     updateCategoryCounts()
     curIdx = m.currentCategoryIdx

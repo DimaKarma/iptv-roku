@@ -5,7 +5,7 @@
     <children>
         <Timer id="epgRefreshTimer" duration="3600" repeat="true" />
         <Timer id="nowTimer" duration="30" repeat="true" />
-        <Rectangle id="background" width="1920" height="1080" color="0x0E1310FF">
+        <Rectangle id="background" width="1920" height="1080" color="0x020B13FF">
             <!-- Loading state -->
             <!-- Not a BusySpinner. A bare one draws nothing (it renders a `poster` it
                  does not have), and attaching one via role="poster" changed nothing on
@@ -26,7 +26,7 @@
             </Group>
             <Label id="statusLabel"
                    text="Loading…"
-                   color="0x8A968EFF"
+                   color="0x86A6B1FF"
                    translation="[0, 560]"
                    width="1920"
                    horizAlign="center"
@@ -35,14 +35,14 @@
             <!-- Error state -->
             <Label id="errorLabel"
                    text=""
-                   color="0xECF2EEFF"
+                   color="0xDCE9EEFF"
                    translation="[0, 480]"
                    width="1920"
                    horizAlign="center"
                    visible="false" />
             <Label id="errorHintLabel"
                    text="Press OK to retry"
-                   color="0x8A968EFF"
+                   color="0x86A6B1FF"
                    translation="[0, 540]"
                    width="1920"
                    horizAlign="center"
@@ -52,15 +52,15 @@
             <Group id="brandGroup" visible="true">
                 <Label text="IPTV Player"
                        translation="[0, 330]"
-                       color="0xECF2EEFF"
+                       color="0xDCE9EEFF"
                        width="1920"
                        horizAlign="center" />
-                <Rectangle translation="[890, 405]" width="140" height="4" color="0x4FB03AFF" />
+                <Rectangle translation="[890, 405]" width="140" height="4" color="0xD5401AFF" />
                 <!-- y=952, not 1000: at 1000 the ink ended 56px from the bottom
                      edge, inside the ~90px overscan zone. -->
                 <Label text="(c) 2026 DimaKarma"
                        translation="[0, 952]"
-                       color="0x8A968EFF"
+                       color="0x86A6B1FF"
                        width="1920"
                        horizAlign="center"
                        scale="[0.7,0.7]"
@@ -79,13 +79,15 @@
             <Group id="onboardingGroup" visible="false">
                 <Label text="IPTV Player"
                        translation="[0, 200]"
-                       color="0xECF2EEFF"
+                       color="0xDCE9EEFF"
                        width="1920"
                        horizAlign="center" />
-                <Keyboard id="onboardingKeyboard" translation="[700, 300]" />
+                <!-- x is set at runtime by CenterKeyboard(): the keyboard is wider than the old
+                     x=700 allowed, and its right edge ran past 1920. -->
+                <Keyboard id="onboardingKeyboard" translation="[274, 300]" />
                 <Label text="Or set the URL in config.json and reinstall"
                        translation="[0, 800]"
-                       color="0x8A968EFF"
+                       color="0x86A6B1FF"
                        width="1920"
                        horizAlign="center" />
                 <Button id="onboardingOk"

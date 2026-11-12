@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="DiagnosticsScreen" extends="Group">
+    <script type="text/brightscript" uri="pkg:/components/DiagnosticsScreen.brs" />
+    <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
+    <interface>
+        <!-- openCommand: toggled by SettingsScreen each time the screen is shown; the
+             handler takes focus. exitRequested: toggled by this screen on Back. -->
+        <field id="openCommand" type="boolean" onChange="onOpen" />
+        <field id="exitRequested" type="boolean" />
+    </interface>
+
+    <children>
+        <!-- Opaque, so the Settings screen underneath does not show through. -->
+        <Rectangle id="background" width="1920" height="1080" color="0x020B13FF" />
+
+        <Label id="titleLabel"
+               text="DIAGNOSTICS"
+               translation="[96, 54]"
+               width="1700"
+               height="40"
+               color="0xDCE9EEFF" />
+
+        <!-- Each row runs ONE probe when selected. Nothing here runs at creation. -->
+        <LabelList id="probeList"
+                   translation="[96, 120]"
+                   itemSize="[800, 70]"
+                   itemSpacing="[0, 10]"
+                   color="0x86A6B1FF"
+                   focusedColor="0xFFFFFFFF"
+                   focusBitmapBlendColor="0xFF4D1FFF"
+                   numRows="4" />
+
+        <Label id="resultLabel"
+               translation="[960, 120]"
+               width="860"
+               height="600"
+               wrap="true"
+               color="0x86A6B1FF"
+               text="Select a probe. Results are also printed to the debug console as [PROBE] lines. Back leaves this screen." />
+    </children>
+</component>

@@ -20,7 +20,7 @@
         <Label id="headerLabel"
                text="SETTINGS"
                translation="[96, 54]"
-               color="0xECF2EEFF"
+               color="0xDCE9EEFF"
                width="1700"
                height="40" />
 
@@ -30,34 +30,42 @@
                    translation="[96, 120]"
                    itemSize="[800, 70]"
                    itemSpacing="[0, 10]"
-                   color="0x8A968EFF"
-                   focusedColor="0x08130AFF"
-                   focusBitmapBlendColor="0x5FD345FF"
-                   numRows="5" />
+                   color="0x86A6B1FF"
+                   focusedColor="0xFFFFFFFF"
+                   focusBitmapBlendColor="0xFF4D1FFF"
+                   numRows="6" />
                    
         <Label id="infoLabel"
                translation="[960, 120]"
-               color="0x8A968EFF"
+               color="0x86A6B1FF"
                width="800"
                height="800"
                wrap="true" />
                
-        <!-- Keyboard overlay -->
+        <!-- Keyboard overlay. The keyboard's x is set at runtime (CenterKeyboard in
+             init and again when shown): it is wider than the old x=700 allowed. Back from
+             the keyboard moves focus to the Save / Cancel list; nothing is discarded by
+             Back from the keyboard. The list is placed under the keyboard at runtime too,
+             so its y below is only the fallback. Same chip mechanism as settingsList. -->
         <Rectangle id="keyboardBg"
                    width="1920" height="1080"
-                   color="0x0E1310E6"
+                   color="0x020B13E6"
                    visible="false">
-            <Keyboard id="keyboard" translation="[700, 200]" />
+            <Keyboard id="keyboard" translation="[274, 200]" />
             <Label id="keyboardHint"
                    text="Enter a new playlist URL"
-                   translation="[700, 150]"
-                   color="0xECF2EEFF" />
-            <Button id="keyboardOk"
-                    text="Save"
-                    translation="[700, 500]" />
-            <Button id="keyboardCancel"
-                    text="Cancel"
-                    translation="[700, 560]" />
+                   translation="[0, 150]"
+                   width="1920"
+                   horizAlign="center"
+                   color="0xDCE9EEFF" />
+            <LabelList id="saveCancelList"
+                       translation="[760, 560]"
+                       itemSize="[400, 60]"
+                       itemSpacing="[0, 10]"
+                       color="0x86A6B1FF"
+                       focusedColor="0xFFFFFFFF"
+                       focusBitmapBlendColor="0xFF4D1FFF"
+                       numRows="2" />
         </Rectangle>
 
         <!-- Toast -->
@@ -65,14 +73,14 @@
                    translation="[460, 950]"
                    width="1000"
                    height="60"
-                   color="0x18211CFF"
+                   color="0x062230FF"
                    visible="false">
             <Label id="toastLabel"
                    width="1000"
                    height="60"
                    horizAlign="center"
                    vertAlign="center"
-                   color="0xECF2EEFF" />
+                   color="0xDCE9EEFF" />
         </Rectangle>
         
         <Timer id="toastTimer" duration="2.5" repeat="false" />

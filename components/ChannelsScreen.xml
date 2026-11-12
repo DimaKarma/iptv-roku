@@ -17,9 +17,9 @@
     <children>
         <!-- Rail on the left -->
         <!-- focusBitmapBlendColor MULTIPLIES the stock focus bitmap. The stock chip is
-             #D5D5D5, so 0x5FD345 lands on #4FB03A exactly - the brandbook green. Paired
-             with on-accent text that is 6.86:1; off-white on the stock grey chip was
-             1.29:1, and green-bright on it is 1.26:1, so deleting the runtime override
+             #D5D5D5, so 0xFF4D1F lands on #D5401A exactly - the accent. Paired
+             with white on-accent text that is 4.59:1; off-white on the stock grey chip was
+             1.29:1, and bright text on it was about 1.26:1, so deleting the runtime override
              instead of changing it would have been a regression. Blending only darkens,
              which is why the UNFOCUSED chip (a separate, darker #303531 footprint bitmap)
              cannot be tinted this way at all - that needs its own bitmap. -->
@@ -27,28 +27,28 @@
                    translation="[96, 54]"
                    itemSize="[380, 50]"
                    itemSpacing="[0, 10]"
-                   color="0x8A968EFF"
-                   focusedColor="0x08130AFF"
-                   focusBitmapBlendColor="0x5FD345FF"
+                   color="0x86A6B1FF"
+                   focusedColor="0xFFFFFFFF"
+                   focusBitmapBlendColor="0xFF4D1FFF"
                    numRows="15" />
                    
         <!-- Header. x=530, not 500, and the grid below moves with it.
              The rail's focus chip is 380 wide by declaration but PAINTS to x=507 - the
              platform draws that bitmap ~32px past its item on each side. At 500 the
-             header's first letter was drawn ON TOP of the chip's green, overlapping by up
+             header's first letter was drawn ON TOP of the chip's accent, overlapping by up
              to 4 columns. 530 puts 24px of background between them, and the header keeps
              its left alignment with the first card column because the grid moves too:
              that alignment is what makes it read as a label FOR the grid. -->
         <Label id="headerLabel"
                translation="[530, 54]"
-               color="0xECF2EEFF"
+               color="0xDCE9EEFF"
                width="1270"
                height="40" />
                
         <!-- Grid on the right -->
         <!-- The grid draws the focus ring itself, OUTSIDE the item and outside its own
              clip, so it is the only indicator that reaches all four sides of every cell
-             including the edge columns. Stock is #E7E9E8; 0x57C140 multiplies to #4FB03A
+             including the edge columns. Stock is #E7E9E8; 0xEB461D multiplies to #D5401A
              exactly. This also matches the brandbook, whose .card.focused is a box-shadow
              OUTSIDE the card - the card's own inner border was the thing moving away
              from it. -->
@@ -59,7 +59,7 @@
                     itemSpacing="[12, 12]"
                     numColumns="4"
                     numRows="4"
-                    focusBitmapBlendColor="0x57C140FF" />
+                    focusBitmapBlendColor="0xEB461DFF" />
                     
         <!-- Empty / Not Found Label -->
         <!-- Spans the grid exactly: 530 + 1356 = 1886, so horizAlign="center" centres on
@@ -69,7 +69,7 @@
                translation="[530, 400]"
                width="1356"
                horizAlign="center"
-               color="0x8A968EFF"
+               color="0x86A6B1FF"
                text="Nothing found"
                visible="false" />
                
@@ -80,14 +80,14 @@
                    translation="[460, 920]"
                    width="1000"
                    height="60"
-                   color="0x18211CFF"
+                   color="0x062230FF"
                    visible="false">
             <Label id="toastLabel"
                    width="1000"
                    height="60"
                    horizAlign="center"
                    vertAlign="center"
-                   color="0xECF2EEFF" />
+                   color="0xDCE9EEFF" />
         </Rectangle>
         
         <Timer id="toastTimer" duration="2.5" repeat="false" />

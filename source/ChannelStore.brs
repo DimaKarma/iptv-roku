@@ -117,8 +117,11 @@ end function
 ' the device (a reinstall wipes cachefs), so the recovery path has to come in with the
 ' package itself.
 '
-' Seeds a key ONLY when that key is currently empty. That makes the file inert on every
-' start after the first: it can never overwrite a list the user has built up, and it
+' Seeds ONLY when the whole `userdata` section has no keys at all, which is what a wipe
+' leaves behind. A list the user emptied on purpose keeps its key (SaveFavorites writes
+' "[]"), so it is left alone: the trigger used to be "this key's list is empty", which
+' put a hand-emptied favourites list back from the seed. That makes the file inert on
+' every start after the first: it can never overwrite what the user has built up, and it
 ' needs no flag, no version counter and no cleanup.
 sub RestoreStoreIfEmpty()
     raw = ReadAsciiFile("pkg:/source/restore.json")
@@ -126,20 +129,21 @@ sub RestoreStoreIfEmpty()
     seed = ParseJson(raw)
     if seed = invalid then return
 
-    if seed.favorites <> invalid
-        cur = LoadFavorites()
-        if cur = invalid or cur.Count() = 0
-            SaveFavorites(seed.favorites)
-            print "[STORE] restored favorites=" + seed.favorites.Count().ToStr()
-        end if
+    sectionEmpty = false
+    sec = getRegistrySection()
+    if sec <> invalid
+        keys = sec.GetKeyList()
+        if keys = invalid or keys.Count() = 0 then sectionEmpty = true
     end if
 
-    if seed.recents <> invalid
-        cur = LoadRecents()
-        if cur = invalid or cur.Count() = 0
-            SaveRecents(seed.recents)
-            print "[STORE] restored recents=" + seed.recents.Count().ToStr()
-        end if
+    if seed.favorites <> invalid and sectionEmpty
+        SaveFavorites(seed.favorites)
+        print "[STORE] restored favorites=" + seed.favorites.Count().ToStr()
+    end if
+
+    if seed.recents <> invalid and sectionEmpty
+        SaveRecents(seed.recents)
+        print "[STORE] restored recents=" + seed.recents.Count().ToStr()
     end if
 end sub
 

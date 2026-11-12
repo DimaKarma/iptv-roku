@@ -18,7 +18,7 @@
         <Label id="nameLabel" translation="[92, 12]" width="384" height="34" wrap="false" />
         <Label id="epgLabel"  translation="[92, 48]" width="384" height="28" wrap="false" />
 
-        <Label id="favStar" text="★" translation="[490, 10]" color="0x74D45BFF" visible="false" />
+        <Label id="favStar" text="★" translation="[490, 10]" color="0x60BBD2FF" visible="false" />
         <Rectangle id="badge" width="20" height="20" translation="[490, 50]" visible="false" />
 
         <!-- Focus border for the 520x88 row, INSIDE the row's own bounds.
@@ -28,10 +28,10 @@
              drawFocusFeedback="false", so nothing was covering the loss. ZapperCard does
              not scale, so this is a plain offset with no scale arithmetic to satisfy. -->
         <Group id="focusBorder" visible="false">
-            <Rectangle width="520" height="4" translation="[0, 0]" color="0x4FB03AFF" />
-            <Rectangle width="520" height="4" translation="[0, 84]" color="0x4FB03AFF" />
-            <Rectangle width="4" height="88" translation="[0, 0]" color="0x4FB03AFF" />
-            <Rectangle width="4" height="88" translation="[516, 0]" color="0x4FB03AFF" />
+            <Rectangle width="520" height="4" translation="[0, 0]" color="0xD5401AFF" />
+            <Rectangle width="520" height="4" translation="[0, 84]" color="0xD5401AFF" />
+            <Rectangle width="4" height="88" translation="[0, 0]" color="0xD5401AFF" />
+            <Rectangle width="4" height="88" translation="[516, 0]" color="0xD5401AFF" />
         </Group>
     </children>
 </component>
